@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Isometric World — terrain heightmap 2.5D viewer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+  <div id="hud">
+    <h1>Isometric World</h1>
+    <p class="sub">Real-world terrain (Nextzen terrarium tiles) rendered as an isometric 2.5D heightfield.</p>
+
+    <div class="field">
+      <label for="zoom">Zoom</label>
+      <select id="zoom">
+        <option value="0">0 (1×1 tiles)</option>
+        <option value="1" selected>1 (2×2 tiles)</option>
+        <option value="2">2 (4×4 tiles)</option>
+        <option value="3">3 (8×8 tiles)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="res">Mesh resolution</label>
+      <input id="res" type="range" min="32" max="160" step="8" value="96">
+      <span id="res-val">96</span>
+    </div>
+
+    <div class="field">
+      <label for="vertical">Vertical exaggeration</label>
+      <input id="vertical" type="range" min="2" max="160" step="1" value="48">
+      <span id="vertical-val">48</span>
+    </div>
+
+    <div class="field">
+      <label for="yaw">Rotation &deg;</label>
+      <input id="yaw" type="range" min="0" max="360" step="1" value="0">
+      <span id="yaw-val">0</span>
+    </div>
+
+    <div class="field inline">
+      <label><input id="rotate" type="checkbox"> Auto-rotate</label>
+    </div>
+    <div class="field inline">
+      <label><input id="water" type="checkbox" checked> Sea level</label>
+    </div>
+
+    <div id="status">Loading terrain…</div>
+  </div>
+
+  <script src="terrain.js"></script>
+  <script src="renderer.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

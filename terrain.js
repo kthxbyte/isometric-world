@@ -1,0 +1,137 @@
+(function (global) {
+  'use strict';
+
+  const TILE_SIZE = 256;
+  const SOURCES = {
+    aws: {
+      name: 'AWS Terrain Tiles (terrarium)',
+      url: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+    }
+  };
+  const SOURCE = SOURCES.aws;
+
+  function tileUrl(z, x, y) {
+    return SOURCE.url
+      .replace('{z}', z)
+      .replace('{x}', x)
+      .replace('{y}', y);
+  }
+
+  function decodeTerrarium(r, g, b) {
+    return (r * 256 + g + b / 256) - 32768;
+  }
+
+  function loadTileImage(z, x, y) {
+    return new Promise(function (resolve, reject) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function () { resolve(img); };
+      img.onerror = function () {
+        reject(new Error('Failed to load tile ' + z + '/' + x + '/' + y));
+      };
+      img.src = tileUrl(z, x, y);
+    });
+  }
+
+  function readTilePixels(img) {
+    const canvas = document.createElement('canvas');
+    canvas.width = TILE_SIZE;
+    canvas.height = TILE_SIZE;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+    const data = ctx.getImageData(0, 0, TILE_SIZE, TILE_SIZE).data;
+    const meters = new Float32Array(TILE_SIZE * TILE_SIZE);
+    for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+      meters[p] = decodeTerrarium(data[i], data[i + 1], data[i + 2]);
+    }
+    return meters;
+  }
+
+  class Terrain {
+    constructor() {
+      this.zoom = null;
+      this.nTiles = 0;
+      this.raw = null;
+      this.rawSize = 0;
+      this.min = 0;
+      this.max = 0;
+    }
+
+    async load(zoom, onTile) {
+      const n = 1 << zoom;
+      const loaders = [];
+      const order = [];
+      for (let y = 0; y < n; y++) {
+        for (let x = 0; x < n; x++) {
+          order.push([x, y]);
+          loaders.push(loadTileImage(zoom, x, y)
+            .then(readTilePixels)
+            .then(function (meters) { return { x: x, y: y, meters: meters }; }));
+        }
+      }
+
+      if (onTile) onTile(0, order.length);
+
+      const tiles = await Promise.all(loaders);
+
+      const G = n * TILE_SIZE;
+      const raw = new Float32Array(G * G);
+      let min = Infinity;
+      let max = -Infinity;
+
+      tiles.forEach(function (t) {
+        const x0 = t.x * TILE_SIZE;
+        const y0 = t.y * TILE_SIZE;
+        for (let row = 0; row < TILE_SIZE; row++) {
+          const srcOff = row * TILE_SIZE;
+          const dstOff = (y0 + row) * G + x0;
+          for (let col = 0; col < TILE_SIZE; col++) {
+            const v = t.meters[srcOff + col];
+            raw[dstOff + col] = v;
+            if (v < min) min = v;
+            if (v > max) max = v;
+          }
+        }
+      });
+
+      this.zoom = zoom;
+      this.nTiles = n;
+      this.raw = raw;
+      this.rawSize = G;
+      this.min = min;
+      this.max = max;
+
+      if (onTile) onTile(order.length, order.length);
+      return this;
+    }
+
+    heightAt(rawX, rawY) {
+      const G = this.rawSize;
+      const i = Math.max(0, Math.min(G - 1, rawY | 0));
+      const j = Math.max(0, Math.min(G - 1, rawX | 0));
+      return this.raw[i * G + j];
+    }
+
+    sampleAt(rawX, rawY) {
+      const G = this.rawSize;
+      const sx = Math.max(0, Math.min(G - 1, rawX));
+      const sy = Math.max(0, Math.min(G - 1, rawY));
+      const x0 = sx | 0;
+      const y0 = sy | 0;
+      const x1 = Math.min(G - 1, x0 + 1);
+      const y1 = Math.min(G - 1, y0 + 1);
+      const fx = sx - x0;
+      const fy = sy - y0;
+      const a = this.raw[y0 * G + x0];
+      const b = this.raw[y0 * G + x1];
+      const c = this.raw[y1 * G + x0];
+      const d = this.raw[y1 * G + x1];
+      const top = a + (b - a) * fx;
+      const bot = c + (d - c) * fx;
+      return top + (bot - top) * fy;
+    }
+  }
+
+  global.Terrain = Terrain;
+  global.TILE_SIZE = TILE_SIZE;
+}(window));
