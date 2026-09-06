@@ -11,6 +11,7 @@
   const yawVal = document.getElementById('yaw-val');
   const rotateEl = document.getElementById('rotate');
   const waterEl = document.getElementById('water');
+  const satEl = document.getElementById('sat');
   const kindEl = document.getElementById('rkind');
 
   const state = { zoom: 1, cx: 0.5, cy: 0.5 };
@@ -105,6 +106,30 @@
     return next;
   }
 
+  function terrainSummary(t) {
+    return t.window + '×' + t.window + ' tiles @ zoom ' + t.zoom +
+      ' (x' + t.originX + ',y' + t.originY + ') · elevation ' +
+      t.min.toFixed(0) + '…' + t.max.toFixed(0) + ' m · ' + fmtPos(state.cx, state.cy);
+  }
+
+  function loadSatellite(id) {
+    if (!active || !active.terrain || !satEl.checked || active.kind !== 'webgl') return;
+    const t = active.terrain;
+    setStatus('Loading satellite imagery…');
+    loadSatelliteTiles(t.zoom, t.originX, t.originY, t.window)
+      .then(function (data) {
+        if (id !== reqId || !satEl.checked || active.kind !== 'webgl') return;
+        active.setSatellite(data);
+        scheduleRender();
+        setStatus(terrainSummary(active.terrain), 'ok');
+      })
+      .catch(function () {
+        if (id !== reqId || !satEl.checked || active.kind !== 'webgl') return;
+        active.setSatellite(null);
+        setStatus('Satellite imagery unavailable; using terrain ramp', 'ok');
+      });
+  }
+
   async function loadWorld() {
     if (!active) return;
     const id = ++reqId;
@@ -132,12 +157,8 @@
       }
 
       active.render();
-      setStatus(
-        rect.w + '×' + rect.w + ' tiles @ zoom ' + zoom +
-        ' (x' + terrain.originX + ',y' + terrain.originY + ') · elevation ' +
-        terrain.min.toFixed(0) + '…' + terrain.max.toFixed(0) + ' m · ' + fmtPos(state.cx, state.cy),
-        'ok'
-      );
+      setStatus(terrainSummary(terrain), 'ok');
+      if (satEl.checked) loadSatellite(id);
     } catch (err) {
       if (id !== reqId) return;
       setStatus('Error: ' + err.message, 'error');
@@ -149,6 +170,7 @@
     if (active && active.kind === kind) return;
     try {
       setRenderer(kind);
+      if (satEl.checked && active.terrain && active.kind === 'webgl') loadSatellite(reqId);
     } catch (err) {
       setStatus('Renderer error: ' + err.message, 'error');
       kindEl.value = '2d';
@@ -180,6 +202,15 @@
   waterEl.addEventListener('change', function () {
     active.seaLevel = waterEl.checked;
     scheduleRender();
+  });
+  satEl.addEventListener('change', function () {
+    if (!active) return;
+    if (satEl.checked) {
+      loadSatellite(reqId);
+    } else {
+      if (active.setSatellite) active.setSatellite(null);
+      scheduleRender();
+    }
   });
 
   window.addEventListener('resize', scheduleRender);

@@ -10,6 +10,11 @@
   };
   const SOURCE = SOURCES.aws;
 
+  const SAT_SOURCE = {
+    name: 'Esri World Imagery',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+  };
+
   function clamp(v, lo, hi) {
     return Math.max(lo, Math.min(hi, v));
   }
@@ -60,6 +65,43 @@
       meters[p] = decodeTerrarium(data[i], data[i + 1], data[i + 2]);
     }
     return meters;
+  }
+
+  function loadSatTileImage(z, x, y) {
+    return new Promise(function (resolve, reject) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function () { resolve(img); };
+      img.onerror = function () {
+        reject(new Error('Failed to load satellite tile ' + z + '/' + x + '/' + y));
+      };
+      img.src = SAT_SOURCE.url
+        .replace('{z}', z)
+        .replace('{y}', y)
+        .replace('{x}', x);
+    });
+  }
+
+  // Composite the same window of Web-Mercator tiles as the heightmap into an
+  // RGBA bitmap, so every heightmap pixel has a matching imagery pixel.
+  async function loadSatelliteTiles(zoom, x0, y0, w) {
+    const loaders = [];
+    for (let dy = 0; dy < w; dy++) {
+      for (let dx = 0; dx < w; dx++) {
+        loaders.push(loadSatTileImage(zoom, x0 + dx, y0 + dy)
+          .then(function (img) { return { dx: dx, dy: dy, img: img }; }));
+      }
+    }
+    const tiles = await Promise.all(loaders);
+    const G = w * TILE_SIZE;
+    const canvas = document.createElement('canvas');
+    canvas.width = G;
+    canvas.height = G;
+    const ctx = canvas.getContext('2d');
+    tiles.forEach(function (t) {
+      ctx.drawImage(t.img, t.dx * TILE_SIZE, t.dy * TILE_SIZE);
+    });
+    return ctx.getImageData(0, 0, G, G).data;
   }
 
   class Terrain {
@@ -158,4 +200,5 @@
   global.Terrain = Terrain;
   global.TILE_SIZE = TILE_SIZE;
   global.terrainWindow = windowRect;
+  global.loadSatelliteTiles = loadSatelliteTiles;
 }(window));

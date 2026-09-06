@@ -47,6 +47,13 @@ html, body {
   color: #8fa2bf;
 }
 
+#hud .att {
+  margin: 12px 0 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #5f7290;
+}
+
 .field {
   margin: 10px 0;
   display: grid;

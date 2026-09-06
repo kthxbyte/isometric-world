@@ -28,6 +28,7 @@
     'uniform vec3 u_light;',
     'varying float v_h;',
     'varying float v_light;',
+    'varying vec2 v_uv;',
     'const float COL = ' + ISO_COL + ';',
     'const float ROW = ' + ISO_ROW + ';',
     'void main() {',
@@ -53,6 +54,7 @@
     '  );',
     '  gl_Position = vec4(ndc, 1.0 - (d - u_depth.x) * u_depth.y * 2.0, 1.0);',
     '  v_h = hC;',
+    '  v_uv = uv;',
     '  v_light = 0.22 + 0.78 * max(0.0, dot(normal, u_light));',
     '}'
   ].join('\n');
@@ -60,10 +62,14 @@
   const FRAG_SRC = [
     'precision highp float;',
     'uniform sampler2D u_ramp;',
+    'uniform sampler2D u_sat;',
+    'uniform float u_satOn;',
     'varying float v_h;',
     'varying float v_light;',
+    'varying vec2 v_uv;',
     'void main() {',
     '  vec3 base = texture2D(u_ramp, vec2(v_h, 0.5)).rgb;',
+    '  if (u_satOn > 0.5) { base = texture2D(u_sat, v_uv).rgb; }',
     '  gl_FragColor = vec4(base * v_light, 1.0);',
     '}'
   ].join('\n');
@@ -166,6 +172,8 @@
 
       this.heightTex = null;
       this.rampTex = this.buildRampTexture(gl);
+      this.satTex = null;
+      this.satReady = false;
 
       const vs = compile(gl, gl.VERTEX_SHADER, VERT_SRC);
       this.prog = link(gl, vs, compile(gl, gl.FRAGMENT_SHADER, FRAG_SRC));
@@ -176,7 +184,7 @@
       this.seaPosLoc = gl.getAttribLocation(this.seaProg, 'a_pos');
 
       this.uniforms = uniformLocations(gl, this.prog,
-        ['u_heights', 'u_ramp', 'u_raw', 'u_texel', 'u_vertical', 'u_rot',
+        ['u_heights', 'u_ramp', 'u_sat', 'u_satOn', 'u_raw', 'u_texel', 'u_vertical', 'u_rot',
           'u_scale', 'u_off', 'u_pan', 'u_size', 'u_depth', 'u_light']);
       this.seaUniforms = uniformLocations(gl, this.seaProg,
         ['u_seaH', 'u_rot', 'u_scale', 'u_off', 'u_pan', 'u_size', 'u_depth', 'u_color']);
@@ -189,6 +197,8 @@
       canvas.addEventListener('webglcontextrestored', function () {
         this.texTerrain = null;
         this.gridS = 0;
+        this.satTex = null;
+        this.satReady = false;
       }.bind(this));
     }
 
@@ -241,6 +251,28 @@
       this.rawSize = G;
       this.texTerrain = terrain;
       this.gridS = 0;
+    }
+
+    setSatellite(data) {
+      const gl = this.gl;
+      if (this.satTex) {
+        gl.deleteTexture(this.satTex);
+        this.satTex = null;
+      }
+      this.satReady = false;
+      if (!data) return;
+
+      const G = this.rawSize || (this.texTerrain && this.texTerrain.rawSize);
+      if (!G) return;
+      this.satTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, this.satTex);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, G, G, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this.satReady = true;
     }
 
     buildGrid(S) {
@@ -351,6 +383,8 @@
       this.setCommon(gl, this.uniforms, layout);
       gl.uniform1i(this.uniforms.u_heights, 0);
       gl.uniform1i(this.uniforms.u_ramp, 1);
+      gl.uniform1i(this.uniforms.u_sat, 2);
+      gl.uniform1f(this.uniforms.u_satOn, this.satReady ? 1.0 : 0.0);
       gl.uniform1f(this.uniforms.u_raw, this.rawSize);
       gl.uniform2f(this.uniforms.u_texel, 1 / this.rawSize, 1 / this.rawSize);
       gl.uniform1f(this.uniforms.u_vertical, this.vertical);
@@ -360,6 +394,8 @@
       gl.bindTexture(gl.TEXTURE_2D, this.heightTex);
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, this.rampTex);
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, this.satReady ? this.satTex : this.rampTex);
 
       gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuf);
       bindAttribs(gl, gl, this.posLoc);
