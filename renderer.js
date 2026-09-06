@@ -34,6 +34,20 @@
     { at: 1.00, color: hexToRgb('#ffffff') }
   ];
 
+  function rampColorRgb(t) {
+    t = Math.max(0, Math.min(1, t));
+    for (let i = 0; i < PALETTE.length - 1; i++) {
+      const lo = PALETTE[i];
+      const hi = PALETTE[i + 1];
+      if (t >= lo.at && t <= hi.at) {
+        const f = (t - lo.at) / (hi.at - lo.at);
+        const c = mix(lo.color, hi.color, f);
+        return [c[0] / 255, c[1] / 255, c[2] / 255];
+      }
+    }
+    return [1, 1, 1];
+  }
+
   function rampColor(t) {
     t = Math.max(0, Math.min(1, t));
     for (let i = 0; i < PALETTE.length - 1; i++) {
@@ -200,4 +214,5 @@
   }
 
   global.Renderer = Renderer;
+  global.isoRampColorRgb = rampColorRgb;
 }(window));

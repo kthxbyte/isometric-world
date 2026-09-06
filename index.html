@@ -14,6 +14,14 @@
     <p class="sub">Real-world terrain (Nextzen terrarium tiles) rendered as an isometric 2.5D heightfield.</p>
 
     <div class="field">
+      <label for="rkind">Renderer</label>
+      <select id="rkind">
+        <option value="webgl" selected>WebGL</option>
+        <option value="2d">Canvas 2D</option>
+      </select>
+    </div>
+
+    <div class="field">
       <label for="zoom">Zoom</label>
       <select id="zoom">
         <option value="0">0 (1×1 tiles)</option>
@@ -53,6 +61,7 @@
 
   <script src="terrain.js"></script>
   <script src="renderer.js"></script>
+  <script src="renderer3d.js"></script>
   <script src="main.js"></script>
 </body>
 </html>
