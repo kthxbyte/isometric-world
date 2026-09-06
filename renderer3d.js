@@ -51,7 +51,7 @@
     '    pix.x / u_size.x * 2.0 - 1.0,',
     '    1.0 - pix.y / u_size.y * 2.0',
     '  );',
-    '  gl_Position = vec4(ndc, (d - u_depth.x) * u_depth.y * 2.0 - 1.0, 1.0);',
+    '  gl_Position = vec4(ndc, 1.0 - (d - u_depth.x) * u_depth.y * 2.0, 1.0);',
     '  v_h = hC;',
     '  v_light = 0.22 + 0.78 * max(0.0, dot(normal, u_light));',
     '}'
@@ -92,7 +92,7 @@
     '    pix.x / u_size.x * 2.0 - 1.0,',
     '    1.0 - pix.y / u_size.y * 2.0',
     '  );',
-    '  gl_Position = vec4(ndc, (d - u_depth.x) * u_depth.y * 2.0 - 1.0, 1.0);',
+    '  gl_Position = vec4(ndc, 1.0 - (d - u_depth.x) * u_depth.y * 2.0, 1.0);',
     '}'
   ].join('\n');
 
