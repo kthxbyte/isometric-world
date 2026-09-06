@@ -16,6 +16,7 @@ html, body {
   height: 100vh;
   display: block;
   background: radial-gradient(120% 120% at 50% 20%, #141b2c 0%, #0b0f17 70%);
+  touch-action: none;
 }
 
 #hud {

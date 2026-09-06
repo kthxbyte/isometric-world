@@ -10,6 +10,21 @@
   };
   const SOURCE = SOURCES.aws;
 
+  function clamp(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+  }
+
+  // Visible window: up to a 2x2 block of tiles around the normalized center
+  // (cx, cy) in [0,1]x[0,1] over the tile space at the given zoom.
+  function windowRect(zoom, cx, cy) {
+    const n = 1 << zoom;
+    const w = Math.min(n, 2);
+    const maxOrigin = Math.max(0, n - w);
+    const x0 = clamp(Math.round(cx * n - (w - 1) / 2), 0, maxOrigin);
+    const y0 = clamp(Math.round(cy * n - (w - 1) / 2), 0, maxOrigin);
+    return { n: n, w: w, x0: x0, y0: y0 };
+  }
+
   function tileUrl(z, x, y) {
     return SOURCE.url
       .replace('{z}', z)
@@ -50,23 +65,28 @@
   class Terrain {
     constructor() {
       this.zoom = null;
-      this.nTiles = 0;
+      this.window = 1;
+      this.originX = 0;
+      this.originY = 0;
+      this.center = { x: 0.5, y: 0.5 };
       this.raw = null;
       this.rawSize = 0;
       this.min = 0;
       this.max = 0;
     }
 
-    async load(zoom, onTile) {
-      const n = 1 << zoom;
+    async load(zoom, cx, cy, onTile) {
+      const rect = windowRect(zoom, cx, cy);
       const loaders = [];
       const order = [];
-      for (let y = 0; y < n; y++) {
-        for (let x = 0; x < n; x++) {
+      for (let dy = 0; dy < rect.w; dy++) {
+        for (let dx = 0; dx < rect.w; dx++) {
+          const x = rect.x0 + dx;
+          const y = rect.y0 + dy;
           order.push([x, y]);
           loaders.push(loadTileImage(zoom, x, y)
             .then(readTilePixels)
-            .then(function (meters) { return { x: x, y: y, meters: meters }; }));
+            .then(function (meters) { return { dx: dx, dy: dy, meters: meters }; }));
         }
       }
 
@@ -74,14 +94,14 @@
 
       const tiles = await Promise.all(loaders);
 
-      const G = n * TILE_SIZE;
+      const G = rect.w * TILE_SIZE;
       const raw = new Float32Array(G * G);
       let min = Infinity;
       let max = -Infinity;
 
       tiles.forEach(function (t) {
-        const x0 = t.x * TILE_SIZE;
-        const y0 = t.y * TILE_SIZE;
+        const x0 = t.dx * TILE_SIZE;
+        const y0 = t.dy * TILE_SIZE;
         for (let row = 0; row < TILE_SIZE; row++) {
           const srcOff = row * TILE_SIZE;
           const dstOff = (y0 + row) * G + x0;
@@ -95,7 +115,10 @@
       });
 
       this.zoom = zoom;
-      this.nTiles = n;
+      this.window = rect.w;
+      this.originX = rect.x0;
+      this.originY = rect.y0;
+      this.center = { x: cx, y: cy };
       this.raw = raw;
       this.rawSize = G;
       this.min = min;
@@ -134,4 +157,5 @@
 
   global.Terrain = Terrain;
   global.TILE_SIZE = TILE_SIZE;
+  global.terrainWindow = windowRect;
 }(window));

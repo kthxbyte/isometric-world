@@ -71,6 +71,8 @@
       this.vertical = 48;
       this.yaw = 0;
       this.seaLevel = true;
+      this.pan = { x: 0, y: 0 };
+      this.fitScale = 0;
     }
 
     resize() {
@@ -86,10 +88,19 @@
       this.cssH = h;
     }
 
+    effectiveSize() {
+      const maxRaw = this.terrain ? this.terrain.rawSize : 4096;
+      return Math.max(2, Math.min(this.size, maxRaw, 256));
+    }
+
+    screenScale() {
+      return this.fitScale;
+    }
+
     rebuildGrid() {
       const t = this.terrain;
       if (!t) return;
-      const W = Math.max(2, this.size);
+      const W = this.effectiveSize();
       const step = t.rawSize / (W - 1);
       this.grid = new Float32Array(W * W);
       for (let i = 0; i < W; i++) {
@@ -126,7 +137,7 @@
     drawTerrain() {
       const t = this.terrain;
       if (!t) return;
-      if (!this.grid || this.gridSize !== this.size) this.rebuildGrid();
+      if (!this.grid || this.gridSize !== this.effectiveSize()) this.rebuildGrid();
 
       const W = this.gridSize;
       const ctx = this.ctx;
@@ -160,8 +171,9 @@
       const span = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
       const pad = 80;
       const scale = Math.min((this.cssW - pad * 2) / span, (this.cssH - pad * 2) / span * 1.6);
-      const ox = this.cssW / 2 - (bounds.minX + bounds.maxX) / 2 * scale;
-      const oy = this.cssH / 2 - (bounds.minY + bounds.maxY) / 2 * scale;
+      this.fitScale = scale;
+      const ox = this.cssW / 2 - (bounds.minX + bounds.maxX) / 2 * scale + this.pan.x;
+      const oy = this.cssH / 2 - (bounds.minY + bounds.maxY) / 2 * scale + this.pan.y;
 
       const sx = (i, j) => pts[(i * W + j) * 2] * scale + ox;
       const sy = (i, j) => pts[(i * W + j) * 2 + 1] * scale + oy;

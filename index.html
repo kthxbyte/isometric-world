@@ -11,7 +11,7 @@
 
   <div id="hud">
     <h1>Isometric World</h1>
-    <p class="sub">Real-world terrain (Nextzen terrarium tiles) rendered as an isometric 2.5D heightfield.</p>
+    <p class="sub">Real-world terrain (Nextzen terrarium tiles) rendered as an isometric 2.5D heightfield. Drag to pan across the world.</p>
 
     <div class="field">
       <label for="rkind">Renderer</label>
@@ -24,16 +24,26 @@
     <div class="field">
       <label for="zoom">Zoom</label>
       <select id="zoom">
-        <option value="0">0 (1×1 tiles)</option>
-        <option value="1" selected>1 (2×2 tiles)</option>
-        <option value="2">2 (4×4 tiles)</option>
-        <option value="3">3 (8×8 tiles)</option>
+        <option value="0">0</option>
+        <option value="1" selected>1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+        <option value="6">6</option>
+        <option value="7">7</option>
+        <option value="8">8</option>
+        <option value="9">9</option>
+        <option value="10">10</option>
+        <option value="11">11</option>
+        <option value="12">12</option>
+        <option value="13">13</option>
       </select>
     </div>
 
     <div class="field">
-      <label for="res">Mesh resolution</label>
-      <input id="res" type="range" min="32" max="160" step="8" value="96">
+      <label for="res">Sampling density</label>
+      <input id="res" type="range" min="32" max="512" step="8" value="96">
       <span id="res-val">96</span>
     </div>
 

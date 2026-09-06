@@ -13,7 +13,26 @@
   const waterEl = document.getElementById('water');
   const kindEl = document.getElementById('rkind');
 
+  const state = { zoom: 1, cx: 0.5, cy: 0.5 };
+  const panPx = { x: 0, y: 0 };
+
   let active = null;
+  let reqId = 0;
+
+  function clamp01(v) {
+    return Math.max(0, Math.min(1, v));
+  }
+
+  function centerToLonLat(cx, cy) {
+    const lon = (cx - 0.5) * 360;
+    const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * cy))) * 180 / Math.PI;
+    return { lon: lon, lat: lat };
+  }
+
+  function fmtPos(cx, cy) {
+    const p = centerToLonLat(cx, cy);
+    return p.lat.toFixed(2) + '°, ' + p.lon.toFixed(2) + '°';
+  }
 
   function setStatus(text, kind) {
     statusEl.textContent = text;
@@ -31,6 +50,16 @@
     scheduleRender._raf = requestAnimationFrame(function () {
       if (active) active.render();
     });
+  }
+
+  function worldPerPx() {
+    return 1 / ((1 << state.zoom) * TILE_SIZE);
+  }
+
+  function resetPan() {
+    panPx.x = 0;
+    panPx.y = 0;
+    if (active) active.pan = { x: 0, y: 0 };
   }
 
   function makeCanvas() {
@@ -64,6 +93,7 @@
     to.vertical = from.vertical;
     to.yaw = from.yaw;
     to.seaLevel = from.seaLevel;
+    to.pan = { x: from.pan ? from.pan.x : 0, y: from.pan ? from.pan.y : 0 };
   }
 
   function setRenderer(kind) {
@@ -75,35 +105,43 @@
     return next;
   }
 
-  let loading = false;
-
   async function loadWorld() {
-    if (loading) return;
     if (!active) return;
-    loading = true;
+    const id = ++reqId;
+    const zoom = state.zoom;
 
-    const zoom = Number(zoomEl.value);
-    active.size = Number(resEl.value);
-    active.vertical = Number(verticalEl.value);
-    active.yaw = (Number(yawEl.value) * Math.PI) / 180;
+    resetPan();
 
-    setStatus('Loading ' + (1 << (zoom * 2)) + ' tile(s) at zoom ' + zoom + '…');
+    const rect = terrainWindow(zoom, state.cx, state.cy);
+    setStatus('Loading ' + rect.w + '×' + rect.w + ' tile(s) at zoom ' + zoom + '…');
     try {
       const terrain = new Terrain();
-      await terrain.load(zoom, function (done, total) {
+      await terrain.load(zoom, state.cx, state.cy, function (done, total) {
         if (total > 1) setStatus('Fetching tiles ' + done + '/' + total + '…');
       });
+      if (id !== reqId) return;
+
       active.terrain = terrain;
       active.grid = null;
+
+      resEl.max = String(terrain.rawSize);
+      if (active.kind === 'webgl') {
+        resEl.value = String(terrain.rawSize);
+        reflectControls();
+        active.size = terrain.rawSize;
+      }
+
       active.render();
       setStatus(
-        'Done. Elevation range ' + terrain.min.toFixed(0) + ' to ' + terrain.max.toFixed(0) + ' m',
+        rect.w + '×' + rect.w + ' tiles @ zoom ' + zoom +
+        ' (x' + terrain.originX + ',y' + terrain.originY + ') · elevation ' +
+        terrain.min.toFixed(0) + '…' + terrain.max.toFixed(0) + ' m · ' + fmtPos(state.cx, state.cy),
         'ok'
       );
     } catch (err) {
+      if (id !== reqId) return;
       setStatus('Error: ' + err.message, 'error');
     }
-    loading = false;
   }
 
   kindEl.addEventListener('change', function () {
@@ -118,7 +156,11 @@
     }
   });
 
-  zoomEl.addEventListener('change', loadWorld);
+  zoomEl.addEventListener('change', function () {
+    state.zoom = Number(zoomEl.value);
+    loadWorld();
+  });
+
   resEl.addEventListener('input', function () {
     resVal.textContent = resEl.value;
     active.size = Number(resEl.value);
@@ -152,6 +194,66 @@
     }
     loadWorld();
   });
+
+  let drag = null;
+
+  function onPointerDown(e) {
+    if (!active || drag) return;
+    const canvas = document.getElementById('view');
+    if (e.target !== canvas) return;
+    drag = {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      cx: state.cx,
+      cy: state.cy,
+      panX: panPx.x,
+      panY: panPx.y
+    };
+    canvas.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  }
+
+  function onPointerMove(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    const px = drag.panX + (e.clientX - drag.x);
+    const py = drag.panY + (e.clientY - drag.y);
+    panPx.x = px;
+    panPx.y = py;
+    if (active.screenScale() > 0) {
+      const k = worldPerPx() / active.screenScale();
+      state.cx = clamp01(drag.cx - px * k);
+      state.cy = clamp01(drag.cy - py * k);
+    }
+    if (active) active.pan = { x: px, y: py };
+    scheduleRender();
+  }
+
+  function onPointerUp(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    const px = drag.panX + (e.clientX - drag.x);
+    const py = drag.panY + (e.clientY - drag.y);
+    const k = active.screenScale() > 0 ? worldPerPx() / active.screenScale() : 0;
+    const prevRect = terrainWindow(state.zoom, drag.cx, drag.cy);
+    const nextRect = terrainWindow(state.zoom, clamp01(drag.cx - px * k), clamp01(drag.cy - py * k));
+    const crossed = prevRect.x0 !== nextRect.x0 || prevRect.y0 !== nextRect.y0;
+    drag = null;
+    if (crossed) {
+      state.cx = clamp01(state.cx);
+      state.cy = clamp01(state.cy);
+      loadWorld();
+    } else {
+      panPx.x = px;
+      panPx.y = py;
+      active.pan = { x: px, y: py };
+      scheduleRender();
+    }
+  }
+
+  document.addEventListener('pointerdown', onPointerDown);
+  document.addEventListener('pointermove', onPointerMove);
+  document.addEventListener('pointerup', onPointerUp);
+  document.addEventListener('pointercancel', onPointerUp);
 
   function tick() {
     if (rotateEl.checked && active) {
