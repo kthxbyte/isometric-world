@@ -64,6 +64,7 @@
 
   class Renderer {
     constructor(canvas) {
+      this.terrainRev = -1;
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
       this.terrain = null;
@@ -101,16 +102,19 @@
       const t = this.terrain;
       if (!t) return;
       const W = this.effectiveSize();
-      const step = t.rawSize / (W - 1);
+      const win = t.windowSize || t.rawSize;
+      const step = win / (W - 1);
       this.grid = new Float32Array(W * W);
       for (let i = 0; i < W; i++) {
-        const rawY = i * step;
+        const rawY = (t.winY || 0) + i * step;
         for (let j = 0; j < W; j++) {
-          const rawX = j * step;
+          const rawX = (t.winX || 0) + j * step;
           this.grid[i * W + j] = t.sampleAt(rawX, rawY);
         }
       }
       this.gridSize = W;
+      this.gridWinX = t.winX | 0;
+      this.gridWinY = t.winY | 0;
     }
 
     project(wx, wy, wz, out) {
@@ -137,7 +141,12 @@
     drawTerrain() {
       const t = this.terrain;
       if (!t) return;
-      if (!this.grid || this.gridSize !== this.effectiveSize()) this.rebuildGrid();
+      if (!this.grid || this.gridSize !== this.effectiveSize() ||
+          (t.revision || 0) !== this.terrainRev ||
+          (t.winX | 0) !== this.gridWinX || (t.winY | 0) !== this.gridWinY) {
+        this.rebuildGrid();
+        this.terrainRev = t.revision || 0;
+      }
 
       const W = this.gridSize;
       const ctx = this.ctx;
@@ -227,4 +236,6 @@
 
   global.Renderer = Renderer;
   global.isoRampColorRgb = rampColorRgb;
+  global.ISO_COL = ISO_COL;
+  global.ISO_ROW = ISO_ROW;
 }(window));

@@ -15,7 +15,6 @@
   const kindEl = document.getElementById('rkind');
 
   const state = { zoom: 1, cx: 0.5, cy: 0.5 };
-  const panPx = { x: 0, y: 0 };
 
   let active = null;
   let reqId = 0;
@@ -53,14 +52,95 @@
     });
   }
 
-  function worldPerPx() {
-    return 1 / ((1 << state.zoom) * TILE_SIZE);
+  // Convert a pointer delta (CSS px) into the world-texel delta of the visible
+  // window, using the inverse of the iso projection matrix for the current yaw:
+  //   M = s * [ COL(ca-sa)  -COL(sa+ca) ; ROW(sa+ca)  ROW(ca-sa) ]
+  function pxToWin(dx, dy) {
+    const s = active ? active.screenScale() : 0;
+    if (!s || s <= 0) return { x: 0, y: 0 };
+    const ca = Math.cos(active.yaw);
+    const sa = Math.sin(active.yaw);
+    const a = (ca - sa) * ISO_COL;
+    const b = (sa + ca) * ISO_COL;
+    const c = (sa + ca) * ISO_ROW;
+    const d = (ca - sa) * ISO_ROW;
+    const det = s * (a * d + c * b);
+    if (det === 0) return { x: 0, y: 0 };
+    return {
+      x: (d * dx + b * dy) / det,
+      y: (-c * dx + a * dy) / det
+    };
   }
 
-  function resetPan() {
-    panPx.x = 0;
-    panPx.y = 0;
-    if (active) active.pan = { x: 0, y: 0 };
+  let strideBusy = false;
+
+  // Recompose the composition (shift by one tile and stream in the entering
+  // strip) so the visible window keeps flowing across fresh tiles.
+  function strideIfNeeded() {
+    const t = active && active.terrain;
+    if (!t || !t.raw) return;
+    for (let guard = 0; guard < 2 * t.compTiles; guard++) {
+      const need = t.strideNeeded();
+      if (!need) break;
+      if (t.tryStride(need.axis, need.dir)) continue;
+      if (strideBusy) return;
+      strideBusy = true;
+      const id = reqId;
+      const terrain = t;
+      const axis = need.axis;
+      const dir = need.dir;
+      t.stride(axis, dir).then(function () {
+        strideBusy = false;
+        if (id !== reqId || active.terrain !== terrain) return;
+        afterStride(terrain);
+      }).catch(function (err) {
+        strideBusy = false;
+        if (id !== reqId || active.terrain !== terrain) return;
+        setStatus('Tile stream error: ' + err.message, 'error');
+      });
+      return;
+    }
+    afterStride(t);
+  }
+
+  function afterStride(t) {
+    refreshSatellite();
+    bumpStatus();
+    scheduleRender();
+  }
+
+  function refreshSatellite() {
+    if (!satEl.checked || !active || active.kind !== 'webgl' || !active.terrain) return;
+    const t = active.terrain;
+    loadSatelliteTiles(t.zoom, t.compOriginX, t.compOriginY, t.compTiles)
+      .then(function (data) {
+        if (active.terrain === t && active.setSatellite) {
+          active.setSatellite(data);
+          scheduleRender();
+        }
+      })
+      .catch(function () {
+        if (active.terrain === t && active.setSatellite) {
+          active.setSatellite(null);
+        }
+      });
+  }
+
+  let lastPreloadAt = 0;
+  function maybePreload() {
+    const t = active && active.terrain;
+    if (!t || !t.raw) return;
+    const now = Date.now();
+    if (now - lastPreloadAt < 300) return;
+    lastPreloadAt = now;
+    const c = t.windowCenter();
+    const n = 1 << t.zoom;
+    const size = Math.min(n, 4);
+    const maxOrigin = Math.max(0, n - size);
+    preloadWindow(t.zoom,
+      clamp(Math.floor(c.cx * n) - 2, 0, maxOrigin),
+      clamp(Math.floor(c.cy * n) - 2, 0, maxOrigin),
+      size, satEl.checked);
   }
 
   function makeCanvas() {
@@ -107,24 +187,31 @@
   }
 
   function terrainSummary(t) {
-    return t.window + '×' + t.window + ' tiles @ zoom ' + t.zoom +
-      ' (x' + t.originX + ',y' + t.originY + ') · elevation ' +
-      t.min.toFixed(0) + '…' + t.max.toFixed(0) + ' m · ' + fmtPos(state.cx, state.cy);
+    const c = t.windowCenter();
+    return t.window + '×' + t.window + ' view @ zoom ' + t.zoom +
+      ' (win ' + Math.floor(t.worldWinX()) + ',' + Math.floor(t.worldWinY()) +
+      ' · ' + t.compTiles + '×' + t.compTiles + ' comp) · elevation ' +
+      t.min.toFixed(0) + '…' + t.max.toFixed(0) + ' m · ' + fmtPos(c.cx, c.cy);
   }
 
-  function loadSatellite(id) {
+  function bumpStatus() {
+    if (!active || !active.terrain) return;
+    setStatus(terrainSummary(active.terrain), 'ok');
+  }
+
+  function loadSatellite() {
     if (!active || !active.terrain || !satEl.checked || active.kind !== 'webgl') return;
     const t = active.terrain;
     setStatus('Loading satellite imagery…');
-    loadSatelliteTiles(t.zoom, t.originX, t.originY, t.window)
+    loadSatelliteTiles(t.zoom, t.compOriginX, t.compOriginY, t.compTiles)
       .then(function (data) {
-        if (id !== reqId || !satEl.checked || active.kind !== 'webgl') return;
+        if (active.terrain !== t || !satEl.checked || active.kind !== 'webgl') return;
         active.setSatellite(data);
         scheduleRender();
-        setStatus(terrainSummary(active.terrain), 'ok');
+        bumpStatus();
       })
       .catch(function () {
-        if (id !== reqId || !satEl.checked || active.kind !== 'webgl') return;
+        if (active.terrain !== t || !satEl.checked || active.kind !== 'webgl') return;
         active.setSatellite(null);
         setStatus('Satellite imagery unavailable; using terrain ramp', 'ok');
       });
@@ -132,13 +219,12 @@
 
   async function loadWorld() {
     if (!active) return;
+    strideBusy = false;
     const id = ++reqId;
     const zoom = state.zoom;
 
-    resetPan();
-
     const rect = terrainWindow(zoom, state.cx, state.cy);
-    setStatus('Loading ' + rect.w + '×' + rect.w + ' tile(s) at zoom ' + zoom + '…');
+    setStatus('Loading ' + rect.w + '×' + rect.w + ' tile view at zoom ' + zoom + '…');
     try {
       const terrain = new Terrain();
       await terrain.load(zoom, state.cx, state.cy, function (done, total) {
@@ -155,10 +241,16 @@
         reflectControls();
         active.size = terrain.rawSize;
       }
+      if (active.gridWindowChange) active.gridWindowChange = true;
+      if (active.gridWin !== undefined) active.gridWin = 0;
+
+      const c = terrain.windowCenter();
+      state.cx = c.cx;
+      state.cy = c.cy;
 
       active.render();
-      setStatus(terrainSummary(terrain), 'ok');
-      if (satEl.checked) loadSatellite(id);
+      bumpStatus();
+      if (satEl.checked) loadSatellite();
     } catch (err) {
       if (id !== reqId) return;
       setStatus('Error: ' + err.message, 'error');
@@ -170,7 +262,7 @@
     if (active && active.kind === kind) return;
     try {
       setRenderer(kind);
-      if (satEl.checked && active.terrain && active.kind === 'webgl') loadSatellite(reqId);
+      if (satEl.checked && active.terrain && active.kind === 'webgl') loadSatellite();
     } catch (err) {
       setStatus('Renderer error: ' + err.message, 'error');
       kindEl.value = '2d';
@@ -206,7 +298,7 @@
   satEl.addEventListener('change', function () {
     if (!active) return;
     if (satEl.checked) {
-      loadSatellite(reqId);
+      loadSatellite();
     } else {
       if (active.setSatellite) active.setSatellite(null);
       scheduleRender();
@@ -232,14 +324,14 @@
     if (!active || drag) return;
     const canvas = document.getElementById('view');
     if (e.target !== canvas) return;
+    const t = active.terrain;
+    if (!t || !t.raw) return;
     drag = {
       id: e.pointerId,
       x: e.clientX,
       y: e.clientY,
-      cx: state.cx,
-      cy: state.cy,
-      panX: panPx.x,
-      panY: panPx.y
+      winX: t.worldWinX(),
+      winY: t.worldWinY()
     };
     canvas.setPointerCapture(e.pointerId);
     e.preventDefault();
@@ -247,38 +339,25 @@
 
   function onPointerMove(e) {
     if (!drag || e.pointerId !== drag.id) return;
-    const px = drag.panX + (e.clientX - drag.x);
-    const py = drag.panY + (e.clientY - drag.y);
-    panPx.x = px;
-    panPx.y = py;
-    if (active.screenScale() > 0) {
-      const k = worldPerPx() / active.screenScale();
-      state.cx = clamp01(drag.cx - px * k);
-      state.cy = clamp01(drag.cy - py * k);
-    }
-    if (active) active.pan = { x: px, y: py };
+    const inv = pxToWin(e.clientX - drag.x, e.clientY - drag.y);
+    const t = active.terrain;
+    t.setWinClamped(drag.winX - inv.x, drag.winY - inv.y);
+    const c = t.windowCenter();
+    state.cx = c.cx;
+    state.cy = c.cy;
+    strideIfNeeded();
+    maybePreload();
     scheduleRender();
+    bumpStatus();
   }
 
   function onPointerUp(e) {
     if (!drag || e.pointerId !== drag.id) return;
-    const px = drag.panX + (e.clientX - drag.x);
-    const py = drag.panY + (e.clientY - drag.y);
-    const k = active.screenScale() > 0 ? worldPerPx() / active.screenScale() : 0;
-    const prevRect = terrainWindow(state.zoom, drag.cx, drag.cy);
-    const nextRect = terrainWindow(state.zoom, clamp01(drag.cx - px * k), clamp01(drag.cy - py * k));
-    const crossed = prevRect.x0 !== nextRect.x0 || prevRect.y0 !== nextRect.y0;
     drag = null;
-    if (crossed) {
-      state.cx = clamp01(state.cx);
-      state.cy = clamp01(state.cy);
-      loadWorld();
-    } else {
-      panPx.x = px;
-      panPx.y = py;
-      active.pan = { x: px, y: py };
-      scheduleRender();
-    }
+    strideIfNeeded();
+    maybePreload();
+    scheduleRender();
+    bumpStatus();
   }
 
   document.addEventListener('pointerdown', onPointerDown);

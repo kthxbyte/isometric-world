@@ -17,6 +17,7 @@
     'attribute vec2 a_pos;',
     'uniform sampler2D u_heights;',
     'uniform float u_raw;',
+    'uniform vec2 u_uv0;',
     'uniform vec2 u_texel;',
     'uniform float u_vertical;',
     'uniform vec2 u_rot;',
@@ -32,7 +33,7 @@
     'const float COL = ' + ISO_COL + ';',
     'const float ROW = ' + ISO_ROW + ';',
     'void main() {',
-    '  vec2 uv = a_pos / u_raw + 0.5;',
+    '  vec2 uv = a_pos / u_raw + u_uv0;',
     '  float hC = texture2D(u_heights, uv).r;',
     '  float hR = texture2D(u_heights, uv + vec2(u_texel.x, 0.0)).r;',
     '  float hL = texture2D(u_heights, uv - vec2(u_texel.x, 0.0)).r;',
@@ -164,9 +165,12 @@
       this.yaw = 0;
       this.seaLevel = true;
       this.pan = { x: 0, y: 0 };
+      this.windowSize = 0;
 
       this.texTerrain = null;
+      this.lastRev = -1;
       this.gridS = 0;
+      this.gridWin = 0;
       this.layout = null;
       this.useUintExt = !!gl.getExtension('OES_element_index_uint');
 
@@ -184,7 +188,7 @@
       this.seaPosLoc = gl.getAttribLocation(this.seaProg, 'a_pos');
 
       this.uniforms = uniformLocations(gl, this.prog,
-        ['u_heights', 'u_ramp', 'u_sat', 'u_satOn', 'u_raw', 'u_texel', 'u_vertical', 'u_rot',
+        ['u_heights', 'u_ramp', 'u_sat', 'u_satOn', 'u_raw', 'u_uv0', 'u_texel', 'u_vertical', 'u_rot',
           'u_scale', 'u_off', 'u_pan', 'u_size', 'u_depth', 'u_light']);
       this.seaUniforms = uniformLocations(gl, this.seaProg,
         ['u_seaH', 'u_rot', 'u_scale', 'u_off', 'u_pan', 'u_size', 'u_depth', 'u_color']);
@@ -249,8 +253,8 @@
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
       this.rawSize = G;
+      this.windowSize = terrain.windowSize || G;
       this.texTerrain = terrain;
-      this.gridS = 0;
     }
 
     setSatellite(data) {
@@ -277,7 +281,7 @@
 
     buildGrid(S) {
       const gl = this.gl;
-      const N = this.rawSize;
+      const N = this.windowSize || this.rawSize;
       S = Math.max(2, Math.min(S, N));
       if (S > 256 && !this.useUintExt) S = 256;
 
@@ -314,6 +318,7 @@
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
 
       this.gridS = S;
+      this.gridWin = this.windowSize;
       this.indexType = is32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
       this.indexCount = idx.length;
 
@@ -340,7 +345,7 @@
     }
 
     computeLayout() {
-      const half = this.rawSize / 2;
+      const half = (this.windowSize || this.rawSize) / 2;
       const ca = Math.cos(this.yaw);
       const sa = Math.sin(this.yaw);
       const a = Math.abs(ca + sa) + Math.abs(ca - sa);
@@ -386,6 +391,11 @@
       gl.uniform1i(this.uniforms.u_sat, 2);
       gl.uniform1f(this.uniforms.u_satOn, this.satReady ? 1.0 : 0.0);
       gl.uniform1f(this.uniforms.u_raw, this.rawSize);
+      const t = this.texTerrain;
+      const wHalf = (this.windowSize || this.rawSize) / 2;
+      gl.uniform2f(this.uniforms.u_uv0,
+        (wHalf + (t ? t.winX : this.windowSize / 2)) / this.rawSize,
+        (wHalf + (t ? t.winY : this.windowSize / 2)) / this.rawSize);
       gl.uniform2f(this.uniforms.u_texel, 1 / this.rawSize, 1 / this.rawSize);
       gl.uniform1f(this.uniforms.u_vertical, this.vertical);
       gl.uniform3f(this.uniforms.u_light, LIGHT[0], LIGHT[1], LIGHT[2]);
@@ -432,11 +442,14 @@
 
       const t = this.terrain;
       if (!t) return;
-      if (t !== this.texTerrain) this.buildTerrain(t);
+      if (t !== this.texTerrain || (t.revision || 0) !== this.lastRev) {
+        this.buildTerrain(t);
+        this.lastRev = t.revision || 0;
+      }
       if (!this.heightTex) return;
       let want = Math.max(2, Math.min(this.size, t.rawSize));
       if (!this.useUintExt && want > 256) want = 256;
-      if (want !== this.gridS) this.buildGrid(want);
+      if (want !== this.gridS || this.gridWin !== this.windowSize) this.buildGrid(want);
       if (!this.gridS) return;
 
       gl.enable(gl.DEPTH_TEST);
