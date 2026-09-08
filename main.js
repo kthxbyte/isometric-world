@@ -13,6 +13,9 @@
   const waterEl = document.getElementById('water');
   const satEl = document.getElementById('sat');
   const kindEl = document.getElementById('rkind');
+  const placesEl = document.getElementById('rp');
+  const savePlaceEl = document.getElementById('save-place');
+  const forgetPlaceEl = document.getElementById('forget-place');
 
   const state = { zoom: 1, cx: 0.5, cy: 0.5 };
 
@@ -37,6 +40,138 @@
   function setStatus(text, kind) {
     statusEl.textContent = text;
     statusEl.className = kind || '';
+  }
+
+  // --- Places: an ever-growing list of bookmarked views to jump back to ---
+  const BUILTIN_PLACES = [];
+  const STORE_KEY = 'isoworld.places.v1';
+  let savedPlaces = [];
+  const placeById = new Map();
+
+  function loadPlaces() {
+    savedPlaces = [];
+    try {
+      const raw = window.localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) savedPlaces = arr;
+      }
+    } catch (err) { /* corrupt store: start fresh */ }
+  }
+
+  function persistPlaces() {
+    try {
+      window.localStorage.setItem(STORE_KEY, JSON.stringify(savedPlaces));
+    } catch (err) { /* storage unavailable: keep in-memory only */ }
+  }
+
+  function populatePlaces() {
+    placeById.clear();
+    placesEl.length = 0;
+    const pick = document.createElement('option');
+    pick.value = '';
+    pick.textContent = '— pick a place —';
+    pick.disabled = true;
+    placesEl.add(pick);
+    BUILTIN_PLACES.forEach(function (p) {
+      placeById.set(p.id, p);
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.name;
+      placesEl.add(o);
+    });
+    const group = document.createElement('optgroup');
+    group.label = 'Saved';
+    savedPlaces.forEach(function (p) {
+      placeById.set(p.id, p);
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.name;
+      group.appendChild(o);
+    });
+    placesEl.add(group);
+  }
+
+  function applyPlace() {
+    const p = placeById.get(placesEl.value);
+    if (!p || !active) return;
+    const n = 1 << (p.zoom != null ? p.zoom : state.zoom);
+    if (p.zoom != null) {
+      state.zoom = p.zoom;
+      zoomEl.value = String(p.zoom);
+    }
+    if (p.vertical != null) {
+      verticalEl.value = String(p.vertical);
+      verticalVal.textContent = String(p.vertical);
+      active.vertical = p.vertical;
+    }
+    if (p.yaw != null) {
+      yawEl.value = String(p.yaw);
+      yawVal.textContent = String(p.yaw);
+      active.yaw = (p.yaw * Math.PI) / 180;
+    }
+    if (typeof p.seaLevel === 'boolean') {
+      waterEl.checked = p.seaLevel;
+      active.seaLevel = p.seaLevel;
+    }
+    if (p.texX != null && p.texY != null) {
+      state.cx = p.texX / (n * 256);
+      state.cy = p.texY / (n * 256);
+    }
+    loadWorld().then(function () {
+      const t = active && active.terrain;
+      if (!t || p.texX == null || p.texY == null) return;
+      // restore the exact (possibly mid-drag) window position
+      t.setWinClamped(p.texX - t.windowSize / 2, p.texY - t.windowSize / 2);
+      const c = t.windowCenter();
+      state.cx = c.cx;
+      state.cy = c.cy;
+      bumpStatus();
+      scheduleRender();
+    }).catch(function (err) {
+      setStatus('Could not load place: ' + err.message, 'error');
+    });
+  }
+
+  function saveCurrentPlace() {
+    const t = active && active.terrain;
+    if (!t || !t.raw) return;
+    const c = t.windowCenter();
+    const n = 1 << t.zoom;
+    const texX = Math.round(c.cx * n * 256);
+    const texY = Math.round(c.cy * n * 256);
+    const name = (window.prompt('Name for this place', 'Place ' + (savedPlaces.length + 1)) || '').trim();
+    if (!name) return;
+    const id = 'u' + Date.now().toString(36);
+    savedPlaces.push({
+      id: id,
+      name: name,
+      zoom: t.zoom,
+      texX: texX,
+      texY: texY,
+      vertical: active.vertical,
+      yaw: ((Math.round(active.yaw * 180 / Math.PI) % 360) + 360) % 360,
+      seaLevel: active.seaLevel
+    });
+    persistPlaces();
+    populatePlaces();
+    placesEl.value = id;
+    setStatus('Saved place: ' + name, 'ok');
+  }
+
+  function forgetSelectedPlace() {
+    const p = placeById.get(placesEl.value);
+    if (!p || BUILTIN_PLACES.some(function (b) { return b.id === p.id; })) {
+      setStatus('Pick a user-saved place to forget', '');
+      return;
+    }
+    if (!window.confirm('Forget "' + p.name + '"?')) return;
+    savedPlaces = savedPlaces.filter(function (s) { return s.id !== p.id; });
+    persistPlaces();
+    populatePlaces();
+    const last = savedPlaces[savedPlaces.length - 1];
+    placesEl.value = last ? last.id : '';
+    setStatus('Forgot place: ' + p.name, 'ok');
   }
 
   function reflectControls() {
@@ -305,9 +440,15 @@
     }
   });
 
+  placesEl.addEventListener('change', applyPlace);
+  savePlaceEl.addEventListener('click', saveCurrentPlace);
+  forgetPlaceEl.addEventListener('click', forgetSelectedPlace);
+
   window.addEventListener('resize', scheduleRender);
   window.addEventListener('load', function () {
     reflectControls();
+    loadPlaces();
+    populatePlaces();
     kindEl.value = 'webgl';
     try {
       setRenderer(kindEl.value);

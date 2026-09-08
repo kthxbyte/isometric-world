@@ -68,10 +68,10 @@
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
       this.terrain = null;
-      this.size = 96;
-      this.vertical = 48;
+      this.size = 512;
+      this.vertical = 20;
       this.yaw = 0;
-      this.seaLevel = true;
+      this.seaLevel = false;
       this.pan = { x: 0, y: 0 };
       this.fitScale = 0;
     }

@@ -160,10 +160,10 @@
       this.drawable = canvas;
 
       this.terrain = null;
-      this.size = 96;
-      this.vertical = 48;
+      this.size = 512;
+      this.vertical = 20;
       this.yaw = 0;
-      this.seaLevel = true;
+      this.seaLevel = false;
       this.pan = { x: 0, y: 0 };
       this.windowSize = 0;
 
@@ -255,6 +255,88 @@
       this.rawSize = G;
       this.windowSize = terrain.windowSize || G;
       this.texTerrain = terrain;
+      this._reportMeshSpikes(terrain, range);
+    }
+
+    _reportMeshSpikes(terrain, range) {
+      // Diagnose "spikes all over" by sampling the mesh grid over the window and
+      // flagging vertices whose height jumps more than a threshold vs neighbors.
+      const G = this.rawSize;
+      const N = this.windowSize || G;
+      if (G < 4 || N < 4) return;
+      const S = this.gridS || 256;
+      const w0 = terrain.winX, w1 = terrain.winY;
+      const vh = this.vertical || 20;
+      const th = Math.max(60, range * 0.25);
+      const raw = terrain.raw;
+      let count = 0;
+      const samples = [];
+      for (let i = 1; i < S - 1; i++) {
+        const yy = Math.max(0, Math.min(G - 1, ((w1 + ((i + 0.5) / S) * N)) | 0));
+        for (let j = 1; j < S - 1; j++) {
+          const xx = Math.max(0, Math.min(G - 1, ((w0 + ((j + 0.5) / S) * N)) | 0));
+          const z = raw[yy * G + xx];
+          const n = (raw[(yy - 1) * G + xx] + raw[(yy + 1) * G + xx] +
+            raw[yy * G + xx - 1] + raw[yy * G + xx + 1]) * 0.25;
+          const d = Math.abs(z - n);
+          if (d > th) {
+            count++;
+            if (samples.length < 4) {
+              samples.push({ xx: xx, yy: yy, z: Math.round(z), nb: Math.round(n), d: Math.round(d) });
+            }
+          }
+        }
+      }
+      const key = terrain.revision + '|' + terrain.compOriginX + ',' + terrain.compOriginY +
+        '|' + w0.toFixed(2) + ',' + w1.toFixed(2) + '|' + terrain.min + '..' + terrain.max;
+      if (key !== this._lastSpikeKey) {
+        this._lastSpikeKey = key;
+        console.log('[mesh-spikes] ' + JSON.stringify({
+          zoom: terrain.zoom,
+          comp: [terrain.compOriginX, terrain.compOriginY],
+          win: [Math.round(w0), Math.round(w1)],
+          elevM: [Math.round(terrain.min), Math.round(terrain.max)],
+          rangeM: Math.round(range),
+          vertical: vh,
+          threshM: Math.round(th),
+          gridS: S,
+          spikeTexels: count,
+          samples: samples,
+          blocksMin: this._compBlockMinMax(terrain).lo,
+          blocksMax: this._compBlockMinMax(terrain).hi
+        }));
+      }
+    }
+
+    // Per-tile-block min/max of the current comp; identifies which tiles supply
+    // the comp extreme values and their coordinates in the comp block grid.
+    _compBlockMinMax(terrain) {
+      const ct = terrain.compTiles;
+      const G = terrain.rawSize;
+      const T = terrain.rawSize / ct;
+      const raw = terrain.raw;
+      const lo = [];
+      const hi = [];
+      for (let dy = 0; dy < ct; dy++) {
+        for (let dx = 0; dx < ct; dx++) {
+          let mn = Infinity, mx = -Infinity;
+          const y0 = dy * T, x0 = dx * T;
+          for (let r = 0; r < T; r++) {
+            const o = (y0 + r) * G + x0;
+            for (let c = 0; c < T; c++) {
+              const v = raw[o + c];
+              if (v < mn) mn = v;
+              if (v > mx) mx = v;
+            }
+          }
+          const b = { dx: dx, dy: dy, x: terrain.compOriginX + dx, y: terrain.compOriginY + dy, min: Math.round(mn), max: Math.round(mx) };
+          lo.push(b);
+          hi.push(b);
+        }
+      }
+      lo.sort((a, b) => a.min - b.min);
+      hi.sort((a, b) => b.max - a.max);
+      return { lo: lo.slice(0, 4), hi: hi.slice(0, 4) };
     }
 
     setSatellite(data) {

@@ -41,6 +41,112 @@
     return (r * 256 + g + b / 256) - 32768;
   }
 
+  function u32be(a, o) {
+    return ((a[o] << 24) | (a[o + 1] << 16) | (a[o + 2] << 8) | a[o + 3]) >>> 0;
+  }
+
+  // PNG IDAT is zlib-wrapped; injected from fetch()/DecompressionStream to avoid
+  // canvas color-management corrupting the R/G/B-encoded elevation bytes.
+  function inflateZlib(bytes) {
+    return new Promise(function (resolve, reject) {
+      if (typeof DecompressionStream !== 'function') {
+        return reject(new Error('no DecompressionStream'));
+      }
+      const stream = new Response(bytes).body.pipeThrough(new DecompressionStream('deflate'));
+      new Response(stream).arrayBuffer().then(function (b) {
+        resolve(new Uint8Array(b));
+      }).catch(reject);
+    });
+  }
+
+  // Deterministic 8-bit RGB/gray/RGBA non-interlaced PNG -> elevation meters.
+  async function decodePngMeters(buf) {
+    let p = 8;
+    let w = 0, h = 0, bitDepth = 0, color = 0, interlace = 0;
+    const idat = [];
+    while (p + 12 <= buf.length) {
+      const len = u32be(buf, p);
+      const type = String.fromCharCode(buf[p + 4], buf[p + 5], buf[p + 6], buf[p + 7]);
+      const data = buf.subarray(p + 8, p + 8 + len);
+      if (type === 'IHDR') {
+        w = u32be(data, 0);
+        h = u32be(data, 4);
+        bitDepth = data[8];
+        color = data[9];
+        interlace = data[12];
+      } else if (type === 'IDAT') {
+        idat.push(data);
+      }
+      p += 12 + len;
+    }
+    if (!w || !h || bitDepth !== 8 || interlace || (color !== 0 && color !== 2 && color !== 6)) {
+      throw new Error('unsupported png ' + w + 'x' + h + ' d' + bitDepth + ' c' + color + ' i' + interlace);
+    }
+    const bpp = color === 2 ? 3 : color === 6 ? 4 : 1;
+    const stride = w * bpp;
+    let total = 0;
+    for (let i = 0; i < idat.length; i++) total += idat[i].length;
+    const merged = new Uint8Array(total);
+    let at = 0;
+    for (let i = 0; i < idat.length; i++) { merged.set(idat[i], at); at += idat[i].length; }
+    const filtered = await inflateZlib(merged);
+    const raw = new Uint8Array(stride * h);
+    let o = 0;
+    for (let y = 0; y < h; y++) {
+      const f = filtered[o++];
+      const rs = y * stride;
+      for (let x = 0; x < stride; x++) {
+        const cur = filtered[o];
+        const left = x >= bpp ? raw[rs + x - bpp] : 0;
+        const up = y > 0 ? raw[rs - stride + x] : 0;
+        const ul = (x >= bpp && y > 0) ? raw[rs - stride + x - bpp] : 0;
+        let v;
+        if (f === 0) v = cur;
+        else if (f === 1) v = cur + left;
+        else if (f === 2) v = cur + up;
+        else if (f === 3) v = cur + ((left + up) >> 1);
+        else v = cur + paeth(left, up, ul);
+        raw[rs + x] = v & 255;
+        o++;
+      }
+    }
+    const cols = color === 6 ? 4 : color === 2 ? 3 : 1;
+    const meters = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      const r = raw[i * cols];
+      const g = cols > 1 ? raw[i * cols + 1] : r;
+      const b = cols > 2 ? raw[i * cols + 2] : g;
+      meters[i] = decodeTerrarium(r, g, b);
+    }
+    return meters;
+  }
+
+  function paeth(a, b, c) {
+    const pa = Math.abs(b - c);
+    const pb = Math.abs(a - c);
+    const pc = Math.abs(a + b - c * 2);
+    return pa <= pb && pa <= pc ? a : (pb <= pc ? b : c);
+  }
+
+  function loadTilePixels(zoom, x, y) {
+    if (typeof fetch === 'function' && typeof DecompressionStream === 'function') {
+      return fetch(tileUrl(zoom, x, y))
+        .then(function (res) {
+          if (!res.ok) throw new Error('HTTP ' + res.status + ' tile ' + zoom + '/' + x + '/' + y);
+          return res.arrayBuffer();
+        })
+        .then(function (buf) { return decodePngMeters(new Uint8Array(buf)); })
+        .catch(function (err) {
+          if (typeof Image === 'function') {
+            return loadTileImage(zoom, x, y).then(readTilePixels);
+          }
+          throw err;
+        });
+    }
+    if (typeof Image === 'function') return loadTileImage(zoom, x, y).then(readTilePixels);
+    return Promise.reject(new Error('no tile decoder available'));
+  }
+
   function loadTileImage(z, x, y) {
     return new Promise(function (resolve, reject) {
       const img = new Image();
@@ -108,8 +214,7 @@
       touchEvict(METERS_CACHE, key, MAX_TILES);
       return Promise.resolve(hit);
     }
-    return loadTileImage(zoom, x, y)
-      .then(readTilePixels)
+    return loadTilePixels(zoom, x, y)
       .then(function (meters) {
         touchEvict(METERS_CACHE, key, MAX_TILES);
         METERS_CACHE.set(key, meters);
@@ -328,8 +433,14 @@
     _stripKeys(axis, dir) {
       const out = [];
       const ct = this.compTiles;
-      const nx = axis === 'x' ? this.compOriginX + dir : this.compOriginX;
-      const ny = axis === 'y' ? this.compOriginY + dir : this.compOriginY;
+      // dir=-1 (west/north): the strip is one tile before the comp origin.
+      // dir=+1 (east/south): one past the far edge, i.e. origin + compTiles.
+      const nx = axis === 'x'
+        ? (dir === -1 ? this.compOriginX - 1 : this.compOriginX + ct)
+        : this.compOriginX;
+      const ny = axis === 'y'
+        ? (dir === -1 ? this.compOriginY - 1 : this.compOriginY + ct)
+        : this.compOriginY;
       for (let k = 0; k < ct; k++) {
         const x = axis === 'x' ? nx : this.compOriginX + k;
         const y = axis === 'y' ? ny : this.compOriginY + k;
