@@ -198,6 +198,12 @@ select, input[type="range"] {
   accent-color: #5b8dd9;
 }
 
+input[type="range"] {
+  /* In the scrollable toolbar a touch drag can be grabbed by the browser's
+     pan gesture and the thumb never moves; let the slider handle it. */
+  touch-action: none;
+}
+
 select {
   background: #101826;
   color: #eaf1fb;
