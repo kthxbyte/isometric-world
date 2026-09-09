@@ -7,7 +7,7 @@ can **drape Esri satellite/imagery tiles** over that same field with texel-exact
 A Nominatim-powered search box flies to any city, country, or landmark.
 
 No build step, no bundler, no runtime dependencies. Serve the folder over HTTP and open
-`index.html`.
+`index.html` — or just visit the live demo at **https://kthxbyte.github.io/isometric-world**.
 
 ## Features
 

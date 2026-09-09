@@ -626,16 +626,20 @@
   document.addEventListener('pointerup', onPointerUp);
   document.addEventListener('pointercancel', onPointerUp);
 
-  function tick() {
+  let lastTick = 0;
+  function tick(t) {
     if (rotateEl.checked && active) {
-      let deg = (active.yaw * 180) / Math.PI % 360;
-      deg = (deg + 0.3) % 360;
-      yawEl.value = Math.round(deg);
-      yawVal.textContent = yawEl.value;
-      active.yaw = (deg * Math.PI) / 180;
+      if (lastTick) {
+        const dt = (t - lastTick) / 1000;
+        active.yaw = (active.yaw + ((6 * dt * Math.PI) / 180)) % (2 * Math.PI);
+        const deg = Math.round((active.yaw * 180) / Math.PI);
+        yawEl.value = deg;
+        yawVal.textContent = deg;
+      }
       scheduleRender();
     }
+    lastTick = t;
     requestAnimationFrame(tick);
   }
-  tick();
+  tick(0);
 }());
