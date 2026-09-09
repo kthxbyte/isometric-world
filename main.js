@@ -43,7 +43,34 @@
   }
 
   // --- Places: an ever-growing list of bookmarked views to jump back to ---
-  const BUILTIN_PLACES = [];
+  const BUILTIN_PLACES = [
+    { id: 'torres-del-paine', name: 'Torres del Paine, Patagonia', zoom: 13, texX: 622272, texY: 1393133, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'ojos-del-salado', name: 'Ojos del Salado, Chile\'s Highest', zoom: 12, texX: 324643, texY: 606373, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'licancabur', name: 'Licancabur & Atacama Altiplano', zoom: 12, texX: 326564, texY: 592628, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'villarrica', name: 'Villarrica Volcano, Lake District', zoom: 12, texX: 314748, texY: 649411, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'cerro-san-valentin', name: 'Cerro San Valentín, Patagonia', zoom: 13, texX: 621301, texY: 1356124, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'central-chile', name: 'Central Chile: Coast Range → Andes', zoom: 10, texX: 78934, texY: 159837, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'grand-canyon', name: 'Grand Canyon, Arizona', zoom: 13, texX: 395333, texY: 822237, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'mount-fuji', name: 'Mount Fuji, Japan', zoom: 12, texX: 928372, texY: 414046, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'mount-everest', name: 'Mount Everest, Himalaya', zoom: 12, texX: 777468, texY: 439323, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'matterhorn', name: 'Matterhorn, Alps', zoom: 13, texX: 1093191, texY: 746283, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'denali', name: 'Denali, Alaska', zoom: 12, texX: 84448, texY: 285732, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'mauna-kea', name: 'Mauna Kea, Hawaii', zoom: 12, texX: 71454, texY: 465369, vertical: 80, yaw: 0, seaLevel: true },
+    { id: 'k2', name: 'K2, Karakoram', zoom: 12, texX: 747149, texY: 412184, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'kilimanjaro', name: 'Kilimanjaro, Tanzania', zoom: 12, texX: 633094, texY: 533227, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'aconcagua', name: 'Aconcagua, Argentina', zoom: 12, texX: 320365, texY: 625008, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'milford-sound', name: 'Milford Sound, New Zealand', zoom: 13, texX: 2026839, texY: 1340056, vertical: 80, yaw: 0, seaLevel: true },
+    { id: 'nanga-parbat', name: 'Nanga Parbat, Pakistan', zoom: 12, texX: 741546, texY: 414494, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'annapurna', name: 'Annapurna I, Nepal', zoom: 12, texX: 768431, texY: 437306, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'mont-blanc', name: 'Mont Blanc, France/Italy', zoom: 12, texX: 544284, texY: 373744, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'mount-rainier', name: 'Mount Rainier, Washington', zoom: 12, texX: 169635, texY: 369442, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'teide', name: 'Teide, Tenerife', zoom: 12, texX: 475814, texY: 438377, vertical: 80, yaw: 0, seaLevel: true },
+    { id: 'elbrus', name: 'Mount Elbrus, Russia', zoom: 12, texX: 647901, texY: 383889, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'puncak-jaya', name: 'Puncak Jaya, New Guinea', zoom: 12, texX: 923863, texY: 536192, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'damavand', name: 'Damavand, Iran', zoom: 12, texX: 676066, texY: 411937, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'chimborazo', name: 'Chimborazo, Ecuador', zoom: 12, texX: 294714, texY: 528567, vertical: 80, yaw: 0, seaLevel: false },
+    { id: 'grand-teton', name: 'Grand Teton, Wyoming', zoom: 13, texX: 403105, texY: 764657, vertical: 80, yaw: 0, seaLevel: false }
+  ];
   const STORE_KEY = 'isoworld.places.v1';
   let savedPlaces = [];
   const placeById = new Map();
@@ -71,7 +98,7 @@
     const pick = document.createElement('option');
     pick.value = '';
     pick.textContent = '— pick a place —';
-    pick.disabled = true;
+    pick.selected = true;
     placesEl.add(pick);
     BUILTIN_PLACES.forEach(function (p) {
       placeById.set(p.id, p);
