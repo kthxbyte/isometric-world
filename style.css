@@ -63,6 +63,11 @@ html, body {
   font-size: 12px;
 }
 
+.field[hidden] { display: none; }
+
+.search-row { display: flex; gap: 6px; min-width: 0; }
+.search-row input[type="text"] { min-width: 0; }
+
 .field.inline {
   display: flex;
   gap: 14px;
@@ -92,6 +97,28 @@ select {
   padding: 5px 6px;
   font-size: 12px;
 }
+
+input[type="text"] {
+  width: 100%;
+  background: #101826;
+  color: #eaf1fb;
+  border: 1px solid rgba(120, 160, 220, 0.25);
+  border-radius: 6px;
+  padding: 5px 6px;
+  font-size: 12px;
+}
+
+#hud button {
+  background: #16233a;
+  color: #dbe4f0;
+  border: 1px solid rgba(120, 160, 220, 0.25);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#hud button:hover { background: #1d2d49; }
 
 input[type="range"] { margin: 0; }
 

@@ -22,6 +22,18 @@
     </div>
 
     <div class="field">
+      <label for="place-search">Search</label>
+      <div class="search-row">
+        <input id="place-search" type="text" placeholder="Copiapó, Atacama, Chile" autocomplete="off">
+        <button id="search-go" type="button" title="Geocode with OpenStreetMap">Go</button>
+      </div>
+    </div>
+    <div class="field" id="search-results" hidden>
+      <label for="search-pick">Matches</label>
+      <select id="search-pick"></select>
+    </div>
+
+    <div class="field">
       <label for="rp">Places</label>
       <select id="rp"></select>
       <button id="save-place" type="button" title="Save the current view to the places list">Save</button>
@@ -75,7 +87,7 @@
     <div class="field inline">
       <label><input id="sat" type="checkbox" checked> Satellite imagery</label>
     </div>
-    <p class="att">Satellite imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community.</p>
+    <p class="att">Satellite imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community.<br>Place search &copy; OpenStreetMap contributors (ODbL), via Nominatim.</p>
 
     <div id="status">Loading terrain…</div>
   </div>

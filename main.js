@@ -16,6 +16,10 @@
   const placesEl = document.getElementById('rp');
   const savePlaceEl = document.getElementById('save-place');
   const forgetPlaceEl = document.getElementById('forget-place');
+  const placeSearchEl = document.getElementById('place-search');
+  const searchGoEl = document.getElementById('search-go');
+  const searchResultsEl = document.getElementById('search-results');
+  const searchPickEl = document.getElementById('search-pick');
 
   const state = { zoom: 1, cx: 0.5, cy: 0.5 };
 
@@ -122,7 +126,6 @@
   function applyPlace() {
     const p = placeById.get(placesEl.value);
     if (!p || !active) return;
-    const n = 1 << (p.zoom != null ? p.zoom : state.zoom);
     if (p.zoom != null) {
       state.zoom = p.zoom;
       zoomEl.value = String(p.zoom);
@@ -142,22 +145,110 @@
       active.seaLevel = p.seaLevel;
     }
     if (p.texX != null && p.texY != null) {
-      state.cx = p.texX / (n * 256);
-      state.cy = p.texY / (n * 256);
+      gotoPosition(p.zoom, p.texX, p.texY);
+    } else {
+      loadWorld();
     }
+  }
+
+  // Center the view, in world-texel coordinates at the given zoom, exactly on a
+  // point (a place bookmark or a geocoded location).
+  function gotoPosition(zoom, texX, texY) {
+    const n = 1 << zoom;
+    state.zoom = zoom;
+    zoomEl.value = String(zoom);
+    state.cx = texX / (n * 256);
+    state.cy = texY / (n * 256);
     loadWorld().then(function () {
       const t = active && active.terrain;
-      if (!t || p.texX == null || p.texY == null) return;
+      if (!t) return;
       // restore the exact (possibly mid-drag) window position
-      t.setWinClamped(p.texX - t.windowSize / 2, p.texY - t.windowSize / 2);
+      t.setWinClamped(texX - t.windowSize / 2, texY - t.windowSize / 2);
       const c = t.windowCenter();
       state.cx = c.cx;
       state.cy = c.cy;
       bumpStatus();
       scheduleRender();
     }).catch(function (err) {
-      setStatus('Could not load place: ' + err.message, 'error');
+      setStatus('Could not load location: ' + err.message, 'error');
     });
+  }
+
+  // --- Geocoding search: OpenStreetMap Nominatim → lat/lon → view ---
+  function latToMercY(latDeg) {
+    const r = latDeg * Math.PI / 180;
+    return 0.5 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / (2 * Math.PI);
+  }
+
+  // Pick the smallest zoom whose 2×2-tile window fits the result bounding box,
+  // with a little margin so the place is not cropped at the view edges.
+  function fitZoomToBBox(bb) {
+    const south = Number(bb[0]);
+    const north = Number(bb[1]);
+    const west = Number(bb[2]);
+    const east = Number(bb[3]);
+    const lngSpan = Math.abs(east - west);
+    const mercSpan = Math.abs(latToMercY(south) - latToMercY(north));
+    const margin = 1.3;
+    const zLng = Math.ceil(Math.log2(720 / (lngSpan * margin)));
+    const zLat = Math.ceil(Math.log2(2 / (mercSpan * margin)));
+    return Math.max(3, Math.min(13, Math.max(zLng, zLat)));
+  }
+
+  let searchHits = [];
+  let searchToken = 0;
+
+  function jumpToHit(hit) {
+    const lat = Number(hit.lat);
+    const lon = Number(hit.lon);
+    const bb = hit.boundingbox || [lat, lat, lon, lon];
+    const zoom = fitZoomToBBox(bb);
+    const n = 1 << zoom;
+    const W = n * 256;
+    const texX = Math.round(((lon + 180) / 360) * W);
+    const texY = Math.round(latToMercY(lat) * W);
+    setStatus('Search: ' + hit.display_name);
+    gotoPosition(zoom, texX, texY);
+  }
+
+  function fillSearchPick(hits) {
+    searchPickEl.length = 0;
+    hits.forEach(function (h, i) {
+      const o = document.createElement('option');
+      o.value = String(i);
+      o.textContent = h.display_name;
+      searchPickEl.add(o);
+    });
+  }
+
+  function geocodeSearch() {
+    const q = placeSearchEl.value.trim();
+    if (!q) return;
+    const token = ++searchToken;
+    setStatus('Searching "' + q + '"…');
+    fetch('https://nominatim.openstreetmap.org/search?' +
+      new URLSearchParams({ q: q, format: 'jsonv2', limit: '5' }), { cache: 'no-store' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('geocoding failed (' + res.status + ')');
+        return res.json();
+      })
+      .then(function (hits) {
+        if (token !== searchToken) return;
+        searchHits = hits || [];
+        if (!searchHits.length) {
+          searchResultsEl.hidden = true;
+          setStatus('No matches for "' + q + '"', 'error');
+          return;
+        }
+        fillSearchPick(searchHits);
+        searchResultsEl.hidden = false;
+        jumpToHit(searchHits[0]);
+      })
+      .catch(function (err) {
+        if (token !== searchToken) return;
+        searchResultsEl.hidden = true;
+        setStatus('Search error: ' + err.message, 'error');
+      });
   }
 
   function saveCurrentPlace() {
@@ -470,6 +561,18 @@
   placesEl.addEventListener('change', applyPlace);
   savePlaceEl.addEventListener('click', saveCurrentPlace);
   forgetPlaceEl.addEventListener('click', forgetSelectedPlace);
+
+  searchGoEl.addEventListener('click', geocodeSearch);
+  placeSearchEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      geocodeSearch();
+    }
+  });
+  searchPickEl.addEventListener('change', function () {
+    const h = searchHits[Number(searchPickEl.value)];
+    if (h) jumpToHit(h);
+  });
 
   window.addEventListener('resize', scheduleRender);
   window.addEventListener('load', function () {
