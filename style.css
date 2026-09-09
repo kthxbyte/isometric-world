@@ -24,6 +24,11 @@ html, body {
   top: 16px;
   left: 16px;
   width: 260px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 160, 220, 0.28) transparent;
   padding: 16px 16px 14px;
   background: rgba(10, 15, 26, 0.82);
   border: 1px solid rgba(120, 160, 220, 0.18);
@@ -32,6 +37,11 @@ html, body {
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
   user-select: none;
 }
+
+#hud::-webkit-scrollbar { width: 8px; }
+#hud::-webkit-scrollbar-thumb { background: rgba(120, 160, 220, 0.25); border-radius: 4px; }
+#hud::-webkit-scrollbar-thumb:hover { background: rgba(120, 160, 220, 0.4); }
+#hud::-webkit-scrollbar-track { background: transparent; }
 
 #hud h1 {
   margin: 0 0 2px;
