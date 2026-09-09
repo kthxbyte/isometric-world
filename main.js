@@ -5,6 +5,8 @@
   const zoomEl = document.getElementById('zoom');
   const resEl = document.getElementById('res');
   const resVal = document.getElementById('res-val');
+  const scaleEl = document.getElementById('scale');
+  const scaleVal = document.getElementById('scale-val');
   const verticalEl = document.getElementById('vertical');
   const verticalVal = document.getElementById('vertical-val');
   const yawEl = document.getElementById('yaw');
@@ -306,6 +308,7 @@
 
   function reflectControls() {
     resVal.textContent = resEl.value;
+    scaleVal.textContent = scaleEl.value + '%';
     verticalVal.textContent = verticalEl.value;
     yawVal.textContent = yawEl.value;
   }
@@ -439,6 +442,7 @@
     to.vertical = from.vertical;
     to.yaw = from.yaw;
     to.seaLevel = from.seaLevel;
+    to.zoomFactor = from.zoomFactor;
     to.pan = { x: from.pan ? from.pan.x : 0, y: from.pan ? from.pan.y : 0 };
   }
 
@@ -545,6 +549,11 @@
     resVal.textContent = resEl.value;
     active.size = Number(resEl.value);
     active.grid = null;
+    scheduleRender();
+  });
+  scaleEl.addEventListener('input', function () {
+    scaleVal.textContent = scaleEl.value + '%';
+    if (active) active.zoomFactor = Number(scaleEl.value) / 100;
     scheduleRender();
   });
   verticalEl.addEventListener('input', function () {

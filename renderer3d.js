@@ -164,6 +164,7 @@
       this.vertical = 20;
       this.yaw = 0;
       this.seaLevel = false;
+      this.zoomFactor = 1;
       this.pan = { x: 0, y: 0 };
       this.windowSize = 0;
 
@@ -439,7 +440,7 @@
       const spanY = syBase * 2 + this.vertical;
       const span = Math.max(spanX, spanY);
       const pad = 80;
-      const scale = Math.min((this.cssW - pad * 2) / span, (this.cssH - pad * 2) / span * 1.6);
+      const scale = Math.min((this.cssW - pad * 2) / span, (this.cssH - pad * 2) / span * 1.6) * this.zoomFactor;
       const midY = -this.vertical / 2;
 
       return {

@@ -72,6 +72,7 @@
       this.vertical = 20;
       this.yaw = 0;
       this.seaLevel = false;
+      this.zoomFactor = 1;
       this.pan = { x: 0, y: 0 };
       this.fitScale = 0;
     }
@@ -179,7 +180,7 @@
 
       const span = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
       const pad = 80;
-      const scale = Math.min((this.cssW - pad * 2) / span, (this.cssH - pad * 2) / span * 1.6);
+      const scale = Math.min((this.cssW - pad * 2) / span, (this.cssH - pad * 2) / span * 1.6) * this.zoomFactor;
       this.fitScale = scale;
       const ox = this.cssW / 2 - (bounds.minX + bounds.maxX) / 2 * scale + this.pan.x;
       const oy = this.cssH / 2 - (bounds.minY + bounds.maxY) / 2 * scale + this.pan.y;
