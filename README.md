@@ -2,7 +2,7 @@
 
 A zero-dependency, client-only 2.5D isometric viewer for real-world terrain. It streams
 **AWS Open Data Terrain Tiles** (Nextzen "terrarium" height rasters), converts the byte
-encoding into an elevation field on the GPU (WebGL) or with a CPU grid (Canvas 2D), and
+encoding into an elevation field on the GPU (WebGL), and
 can **drape Esri satellite/imagery tiles** over that same field with texel-exact alignment.
 A Nominatim-powered search box flies to any city, country, or landmark.
 
@@ -13,11 +13,11 @@ No build step, no bundler, no runtime dependencies. Serve the folder over HTTP a
 
 - Drag to pan across the entire world at zoom levels 0–13; the 2×2-tile view window flows
   seamlessly across the composition as you pan ("stride" recomposition).
-- Satellite imagery toggle (WebGL renderer) — imagery is stitched from the **same tile
+- Satellite imagery toggle — imagery is stitched from the **same tile
   window** as the heightmap and aligned in texture space, so every terrain texel has a
   matching imagery texel.
-- Two renderers: GPU (WebGL2/WebGL1 vertex-shader heightfield) and CPU (Canvas 2D painter
-  algorithm). Switchable live, with full state carried over.
+- WebGL-only rendering: a (WebGL2/WebGL1) vertex-shader heightfield with per-vertex
+  lighting and satellite draping.
 - Controls: sampling density, vertical exaggeration, yaw/rotation (and auto-rotate),
   sea-level fill, **map scale** (pure visual zoom that changes neither mesh density nor the
   number of texels used), place bookmarks, and geocoding search.
@@ -32,7 +32,6 @@ No build step, no bundler, no runtime dependencies. Serve the folder over HTTP a
 | --- | --- |
 | `terrain.js` | Tile pipeline: fetch + PNG decode → elevation meters, Web-Mercator geometry, composition ("comp") buffer, stride/recompose streaming, tile LRU caches, satellite stitching. |
 | `renderer3d.js` | WebGL renderer: height texture upload, per-vertex shading, ramp/imagery fragment shading, sea-level plane, fit-to-screen layout. |
-| `renderer.js` | Canvas 2D renderer: CPU grid resampling, painter's-algorithm cell fill, shared elevation ramp. |
 | `main.js` | App glue: renderer lifecycle, controls, drag/pan inversion, places, geocoding search, preload/warm strategy. |
 | `index.html` / `style.css` | Static HUD; the only DOM the app needs. |
 
@@ -50,11 +49,11 @@ The data flow, roughly:
    │  composition buffer (up to 6×6 tiles)         │
    │  raw  = Float32Array(N×N) elevation meters    │
    └───────────────────────────────────────────────┘
-   ↓                       ↓        ↓ (WebGL: stitched comp RGBA)
- WebGL: 16-bit norm →     2D:      height texture      imagery texture
- LUMINANCE_ALPHA tex      bilinear   (per-vertex           (per-fragment
- vertex-shader height     CPU grid   normals+light)        override)
- isometric projection + shading
+   ↓                         ↓ (WebGL: stitched comp RGBA)
+ 16-bit norm →       height texture       imagery texture
+ LUMINANCE_ALPHA      (per-vertex          (per-fragment
+ texture               normals+light)       override)
+ iso projection + shading
 ```
 
 ---
@@ -77,7 +76,7 @@ meters = (R·256 + G + B/256) − 32768
 - The 16 bits of integer precision ride in `R` and `G` (scale ~1 m per bit … precision is
   ~1/256 m at the low end), while `B` carries fractional sub-meter detail.
 - Values below sea level decode to **negative meters** (the ocean is genuinely negative,
-  down to the trench), which the renderers consume directly.
+  down to the trench), which the renderer consumes directly.
 - The tiles are derived from NASA SRTM and ASTER data and redistributed by Nextzen on the
   AWS Open Data program; see **Attribution**.
 
@@ -172,7 +171,7 @@ comp edge does the app **stride**:
    tiles) into the LRU cache.
 3. `_recompose` copies the retained `compTiles−1` strips/shifts into place and splices in
    the new strip — a row/column shift, `O(N²)` memcpy, no refetch of already-visible data.
-4. `revision++` signals both renderers to re-upload / re-sort.
+4. `revision++` signals the renderer to re-upload the height texture.
 
 A throttled `preloadWindow` (4×4 tiles around the view center, 300 ms debounce) warms the
 cache so stride usually finds its strip already resident. `strideIfNeeded` prefers a
@@ -180,7 +179,7 @@ synchronous in-cache recompose and only blocks on the network when the strip isn
 
 ### Min/max normalization — one global knob per comp
 
-`Terrain.min/max` are computed over the **entire comp**. Both renderers normalize elevation
+`Terrain.min/max` are computed over the **entire comp**. The renderer normalizes elevation
 by this single range (`(h − min)/(max − min)`), which is what makes one corroded SRTM tile
 able to flatten a whole scene — see **Data-quality notes**.
 
@@ -208,16 +207,13 @@ Satellite alignment is the cleverest part of the tile pipeline and is solved by 
   `refreshSatellite` → `setSatellite(data)`), so imagery stays lock-step with heights.
 - A `setSatellite(null)` fallback demotes to the elevation ramp if imagery fails.
 
-Note: the Canvas 2D renderer colors purely from the elevation ramp (no imagery), which is
-why the imagery checkbox drives the WebGL texture only.
-
 ---
 
 ## Rendering
 
-### Shared projection model
+### Projection model
 
-Both renderers implement the same dimetric-ish projection with 30° iso axes:
+The renderer uses a dimetric-ish projection with 30° iso axes:
 
 ```
 xr = wx·cos(yaw) − wy·sin(yaw)     // rotate terrain by "yaw"
@@ -263,15 +259,6 @@ det = s·(a·d + c·b)
   before the mesh when `seaLevel` is on and the comp dips below sea level.
 - Grid rebuilds only on `gridS`/`windowSize` changes — panning resamples per-vertex on the
   GPU (`u_uv0` slides), no CPU work.
-
-### Canvas 2D path (`renderer.js`)
-
-- Resamples the window at `size`² with bilinear interpolation (`sampleAt`), rebuilds the
-  grid synchronously on pan/revision.
-- Projects every vertex, computes per-frame `fitScale`/origin, then fills quads in
-  painter's order: cells sorted by `depth = xr+yr` (back-to-front for correct iso overlap).
-- Its `<img>`+canvas satellite isn't used (CPU path is many times slower at cells), but the
-  elevation ramp and sea-level quad are reproduced identically.
 
 ---
 

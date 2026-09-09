@@ -14,7 +14,6 @@
   const rotateEl = document.getElementById('rotate');
   const waterEl = document.getElementById('water');
   const satEl = document.getElementById('sat');
-  const kindEl = document.getElementById('rkind');
   const placesEl = document.getElementById('rp');
   const savePlaceEl = document.getElementById('save-place');
   const forgetPlaceEl = document.getElementById('forget-place');
@@ -378,7 +377,7 @@
   }
 
   function refreshSatellite() {
-    if (!satEl.checked || !active || active.kind !== 'webgl' || !active.terrain) return;
+    if (!satEl.checked || !active || !active.terrain) return;
     const t = active.terrain;
     loadSatelliteTiles(t.zoom, t.compOriginX, t.compOriginY, t.compTiles)
       .then(function (data) {
@@ -420,39 +419,12 @@
     return canvas;
   }
 
-  function createRenderer(kind, canvas) {
-    let renderer;
-    if (kind === 'webgl') {
-      renderer = new WebGLRenderer(canvas);
-      if (!renderer.available) {
-        throw new Error('WebGL is not supported by this browser');
-      }
-    } else {
-      renderer = new Renderer(canvas);
+  function createWebGLRenderer(canvas) {
+    const renderer = new WebGLRenderer(canvas);
+    if (!renderer.available) {
+      throw new Error('WebGL is not supported by this browser');
     }
-    renderer.kind = kind;
     return renderer;
-  }
-
-  function copyState(from, to) {
-    to.terrain = from.terrain;
-    to.grid = from.grid;
-    to.gridSize = from.gridSize;
-    to.size = from.size;
-    to.vertical = from.vertical;
-    to.yaw = from.yaw;
-    to.seaLevel = from.seaLevel;
-    to.zoomFactor = from.zoomFactor;
-    to.pan = { x: from.pan ? from.pan.x : 0, y: from.pan ? from.pan.y : 0 };
-  }
-
-  function setRenderer(kind) {
-    const canvas = makeCanvas();
-    const next = createRenderer(kind, canvas);
-    if (active) copyState(active, next);
-    active = next;
-    scheduleRender();
-    return next;
   }
 
   function terrainSummary(t) {
@@ -469,18 +441,18 @@
   }
 
   function loadSatellite() {
-    if (!active || !active.terrain || !satEl.checked || active.kind !== 'webgl') return;
+    if (!active || !active.terrain || !satEl.checked) return;
     const t = active.terrain;
     setStatus('Loading satellite imagery…');
     loadSatelliteTiles(t.zoom, t.compOriginX, t.compOriginY, t.compTiles)
       .then(function (data) {
-        if (active.terrain !== t || !satEl.checked || active.kind !== 'webgl') return;
+        if (active.terrain !== t || !satEl.checked) return;
         active.setSatellite(data);
         scheduleRender();
         bumpStatus();
       })
       .catch(function () {
-        if (active.terrain !== t || !satEl.checked || active.kind !== 'webgl') return;
+        if (active.terrain !== t || !satEl.checked) return;
         active.setSatellite(null);
         setStatus('Satellite imagery unavailable; using terrain ramp', 'ok');
       });
@@ -502,16 +474,11 @@
       if (id !== reqId) return;
 
       active.terrain = terrain;
-      active.grid = null;
 
       resEl.max = String(terrain.rawSize);
-      if (active.kind === 'webgl') {
-        resEl.value = String(terrain.rawSize);
-        reflectControls();
-        active.size = terrain.rawSize;
-      }
-      if (active.gridWindowChange) active.gridWindowChange = true;
-      if (active.gridWin !== undefined) active.gridWin = 0;
+      resEl.value = String(terrain.rawSize);
+      reflectControls();
+      active.size = terrain.rawSize;
 
       const c = terrain.windowCenter();
       state.cx = c.cx;
@@ -525,19 +492,6 @@
       setStatus('Error: ' + err.message, 'error');
     }
   }
-
-  kindEl.addEventListener('change', function () {
-    const kind = kindEl.value;
-    if (active && active.kind === kind) return;
-    try {
-      setRenderer(kind);
-      if (satEl.checked && active.terrain && active.kind === 'webgl') loadSatellite();
-    } catch (err) {
-      setStatus('Renderer error: ' + err.message, 'error');
-      kindEl.value = '2d';
-      if (!(active && active.kind === '2d')) setRenderer('2d');
-    }
-  });
 
   zoomEl.addEventListener('change', function () {
     state.zoom = Number(zoomEl.value);
@@ -615,12 +569,11 @@
     reflectControls();
     loadPlaces();
     populatePlaces();
-    kindEl.value = 'webgl';
     try {
-      setRenderer(kindEl.value);
+      active = createWebGLRenderer(makeCanvas());
     } catch (err) {
-      kindEl.value = '2d';
-      setRenderer('2d');
+      setStatus('Error: ' + err.message, 'error');
+      return;
     }
     loadWorld();
   });

@@ -12,6 +12,50 @@
 
   const SEA_COLOR = [0.102, 0.275, 0.502];
 
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
+  }
+
+  function hexToRgb(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+
+  function mix(c1, c2, t) {
+    return [
+      lerp(c1[0], c2[0], t),
+      lerp(c1[1], c2[1], t),
+      lerp(c1[2], c2[2], t)
+    ];
+  }
+
+  const RAMP = [
+    { at: 0.00, color: hexToRgb('#08306b') },
+    { at: 0.12, color: hexToRgb('#1c6fa8') },
+    { at: 0.22, color: hexToRgb('#3182bd') },
+    { at: 0.30, color: hexToRgb('#2c7a41') },
+    { at: 0.42, color: hexToRgb('#63a832') },
+    { at: 0.55, color: hexToRgb('#c8d451') },
+    { at: 0.68, color: hexToRgb('#b4985a') },
+    { at: 0.80, color: hexToRgb('#a68060') },
+    { at: 0.90, color: hexToRgb('#e8e4dc') },
+    { at: 1.00, color: hexToRgb('#ffffff') }
+  ];
+
+  function rampColorRgb(t) {
+    t = Math.max(0, Math.min(1, t));
+    for (let i = 0; i < RAMP.length - 1; i++) {
+      const lo = RAMP[i];
+      const hi = RAMP[i + 1];
+      if (t >= lo.at && t <= hi.at) {
+        const f = (t - lo.at) / (hi.at - lo.at);
+        const c = mix(lo.color, hi.color, f);
+        return [c[0] / 255, c[1] / 255, c[2] / 255];
+      }
+    }
+    return [1, 1, 1];
+  }
+
   const VERT_SRC = [
     'precision highp float;',
     'attribute vec2 a_pos;',
@@ -209,7 +253,7 @@
 
     buildRampTexture(gl) {
       const data = new Uint8Array(256 * 4);
-      const ramp = global.isoRampColorRgb;
+      const ramp = rampColorRgb;
       for (let i = 0; i < 256; i++) {
         const c = ramp(i / 255);
         data[i * 4] = Math.round(c[0] * 255);
@@ -546,4 +590,7 @@
   }
 
   global.WebGLRenderer = WebGLRenderer;
+  global.isoRampColorRgb = rampColorRgb;
+  global.ISO_COL = ISO_COL;
+  global.ISO_ROW = ISO_ROW;
 }(window));
