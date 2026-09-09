@@ -603,6 +603,13 @@
     if (e.key === 'Escape' && hudEl.classList.contains('open')) setHudOpen(false);
   });
 
+  // In-app documentation: renders README.md (markdown.js) in a full-screen
+  // overlay with a table of contents; deep-linkable at #docs/readme.
+  const docs = new Docs({
+    onOpen: function () { setHudOpen(false); }
+  });
+  docs.fromHash();
+
   window.addEventListener('resize', scheduleRender);
   window.addEventListener('load', function () {
     reflectControls();

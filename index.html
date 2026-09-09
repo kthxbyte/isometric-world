@@ -12,94 +12,123 @@
   <button id="hud-toggle" type="button" aria-label="Toggle toolbar" aria-expanded="false" title="Toolbar">&#9776;</button>
 
   <div id="hud">
-    <h1>Isometric World</h1>
+    <div class="hud-head">
+      <h1>Isometric World</h1>
+      <button id="docs-open" type="button" title="Read the README" aria-label="Show documentation">Docs</button>
+    </div>
     <p class="sub">Real-world terrain (Nextzen terrarium tiles) rendered as an isometric 2.5D heightfield. Drag to pan across the world.</p>
 
-    <div class="field">
-      <label for="rkind">Renderer</label>
-      <select id="rkind">
-        <option value="webgl" selected>WebGL</option>
-        <option value="2d">Canvas 2D</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label for="place-search">Search</label>
-      <div class="search-row">
-        <input id="place-search" type="text" placeholder="Copiapó, Atacama, Chile" autocomplete="off">
-        <button id="search-go" type="button" title="Geocode with OpenStreetMap">Go</button>
+    <details class="group" id="g-places" open>
+      <summary>Places</summary>
+      <div class="field">
+        <label for="rkind">Renderer</label>
+        <select id="rkind">
+          <option value="webgl" selected>WebGL</option>
+          <option value="2d">Canvas 2D</option>
+        </select>
       </div>
-    </div>
-    <div class="field" id="search-results" hidden>
-      <label for="search-pick">Matches</label>
-      <select id="search-pick"></select>
-    </div>
 
-    <div class="field">
-      <label for="rp">Places</label>
-      <select id="rp"></select>
-      <button id="save-place" type="button" title="Save the current view to the places list">Save</button>
-      <button id="forget-place" type="button" title="Remove the selected saved place">Forget</button>
-    </div>
+      <div class="field">
+        <label for="place-search">Search</label>
+        <div class="search-row">
+          <input id="place-search" type="text" placeholder="Copiapó, Atacama, Chile" autocomplete="off">
+          <button id="search-go" type="button" title="Geocode with OpenStreetMap">Go</button>
+        </div>
+      </div>
+      <div class="field" id="search-results" hidden>
+        <label for="search-pick">Matches</label>
+        <select id="search-pick"></select>
+      </div>
 
-    <div class="field">
-      <label for="zoom">Zoom</label>
-      <select id="zoom">
-        <option value="0">0</option>
-        <option value="1" selected>1</option>
-        <option value="2">2</option>
-        <option value="3">3</option>
-        <option value="4">4</option>
-        <option value="5">5</option>
-        <option value="6">6</option>
-        <option value="7">7</option>
-        <option value="8">8</option>
-        <option value="9">9</option>
-        <option value="10">10</option>
-        <option value="11">11</option>
-        <option value="12">12</option>
-        <option value="13">13</option>
-      </select>
-    </div>
+      <div class="field">
+        <label for="rp">Places</label>
+        <select id="rp"></select>
+        <button id="save-place" type="button" title="Save the current view to the places list">Save</button>
+        <button id="forget-place" type="button" title="Remove the selected saved place">Forget</button>
+      </div>
+    </details>
 
-    <div class="field">
-      <label for="res">Sampling density</label>
-      <input id="res" type="range" min="32" max="512" step="8" value="512">
-      <span id="res-val">512</span>
-    </div>
+    <details class="group" id="g-view" open>
+      <summary>View</summary>
+      <div class="field">
+        <label for="zoom">Zoom</label>
+        <select id="zoom">
+          <option value="0">0</option>
+          <option value="1" selected>1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+          <option value="11">11</option>
+          <option value="12">12</option>
+          <option value="13">13</option>
+        </select>
+      </div>
 
-    <div class="field">
-      <label for="scale">Map scale</label>
-      <input id="scale" type="range" min="40" max="200" step="5" value="100">
-      <span id="scale-val">100%</span>
-    </div>
+      <div class="field">
+        <label for="res">Sampling density</label>
+        <input id="res" type="range" min="32" max="512" step="8" value="512">
+        <span id="res-val">512</span>
+      </div>
 
-    <div class="field">
-      <label for="vertical">Vertical exaggeration</label>
-      <input id="vertical" type="range" min="2" max="160" step="1" value="20">
-      <span id="vertical-val">20</span>
-    </div>
+      <div class="field">
+        <label for="scale">Map scale</label>
+        <input id="scale" type="range" min="40" max="200" step="5" value="100">
+        <span id="scale-val">100%</span>
+      </div>
 
-    <div class="field">
-      <label for="yaw">Rotation &deg;</label>
-      <input id="yaw" type="range" min="0" max="360" step="1" value="0">
-      <span id="yaw-val">0</span>
-    </div>
+      <div class="field">
+        <label for="yaw">Rotation &deg;</label>
+        <input id="yaw" type="range" min="0" max="360" step="1" value="0">
+        <span id="yaw-val">0</span>
+      </div>
 
-    <div class="field inline">
-      <label><input id="rotate" type="checkbox" checked> Auto-rotate</label>
-    </div>
-    <div class="field inline">
-      <label><input id="water" type="checkbox"> Sea level</label>
-    </div>
-    <div class="field inline">
-      <label><input id="sat" type="checkbox" checked> Satellite imagery</label>
-    </div>
+      <div class="field inline">
+        <label><input id="rotate" type="checkbox" checked> Auto-rotate</label>
+      </div>
+    </details>
+
+    <details class="group" id="g-terrain" open>
+      <summary>Terrain</summary>
+      <div class="field">
+        <label for="vertical">Vertical exaggeration</label>
+        <input id="vertical" type="range" min="2" max="160" step="1" value="20">
+        <span id="vertical-val">20</span>
+      </div>
+
+      <div class="field inline">
+        <label><input id="water" type="checkbox"> Sea level</label>
+      </div>
+      <div class="field inline">
+        <label><input id="sat" type="checkbox" checked> Satellite imagery</label>
+      </div>
+    </details>
+
     <p class="att">Satellite imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community.<br>Place search &copy; OpenStreetMap contributors (ODbL), via Nominatim.</p>
 
     <div id="status">Loading terrain…</div>
   </div>
 
+  <div id="docs" hidden role="dialog" aria-modal="true" aria-labelledby="docs-heading">
+    <nav id="docs-nav" aria-label="Documents and contents">
+      <div id="docs-head">
+        <h2 id="docs-heading">Docs</h2>
+        <button id="docs-close" type="button" title="Close (Esc)" aria-label="Close documentation">&#10005;</button>
+      </div>
+      <ul id="docs-list"></ul>
+    </nav>
+    <div id="docs-body" tabindex="-1" aria-label="Document">
+      <article id="docs-article"></article>
+    </div>
+  </div>
+
+  <script src="markdown.js"></script>
+  <script src="docs.js"></script>
   <script src="terrain.js"></script>
   <script src="renderer.js"></script>
   <script src="renderer3d.js"></script>

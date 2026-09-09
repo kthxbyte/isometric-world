@@ -323,11 +323,20 @@ Serving matters: the app fetches tiles with `crossOrigin`/`fetch`, so `file://` 
 work for remote tiles (and browsers send a CORS-safe request with an Origin header, which
 both AWS S3 and Esri answer with `Access-Control-Allow-Origin`).
 
+This README is also viewable inside the app: the **Docs** button in the toolbar renders it
+through the bundled `markdown.js` parser (escape-first, no external libraries), with a
+table of contents and keyboard navigation; it deep-links at `#docs/readme`.
+
 Validation is done with the standalone Node harnesses in `/tmp/opencode` (not part of the
 repo): a tile-proof decode comparison against `pngjs`, and round-trip checks that every
 built-in place recenters to its exact `texX/texY` without clamping.
 
 ## License
 
-Code: see repository license. **Attribution for the data used is mandatory and is included
-in the UI footer** — see the Attribution section above for the three providers.
+MIT — see [LICENSE](LICENSE). Copyright © 2026 Salvador Muñoz.
+
+**Author:** Salvador Muñoz, with the extremely helpful assistance of OpenCode Zen
+(Big Pickle).
+
+**Attribution for the data used is mandatory and is included in the UI footer** — see the
+Attribution section above for the three providers.
