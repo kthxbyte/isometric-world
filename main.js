@@ -20,6 +20,8 @@
   const searchGoEl = document.getElementById('search-go');
   const searchResultsEl = document.getElementById('search-results');
   const searchPickEl = document.getElementById('search-pick');
+  const hudEl = document.getElementById('hud');
+  const hudToggleEl = document.getElementById('hud-toggle');
 
   const state = { zoom: 1, cx: 0.5, cy: 0.5 };
 
@@ -44,6 +46,15 @@
   function setStatus(text, kind) {
     statusEl.textContent = text;
     statusEl.className = kind || '';
+  }
+
+  // On narrow screens the toolbar is a slide-in drawer; keep it in sync with
+  // the toggle button. On desktop these classes have no visual effect.
+  function setHudOpen(open) {
+    hudEl.classList.toggle('open', !!open);
+    hudToggleEl.classList.toggle('open', !!open);
+    hudToggleEl.setAttribute('aria-expanded', String(!!open));
+    hudToggleEl.textContent = open ? '\u2715' : '\u2630';
   }
 
   // --- Places: an ever-growing list of bookmarked views to jump back to ---
@@ -159,6 +170,7 @@
     zoomEl.value = String(zoom);
     state.cx = texX / (n * 256);
     state.cy = texY / (n * 256);
+    setHudOpen(false);
     loadWorld().then(function () {
       const t = active && active.terrain;
       if (!t) return;
@@ -525,6 +537,7 @@
 
   zoomEl.addEventListener('change', function () {
     state.zoom = Number(zoomEl.value);
+    setHudOpen(false);
     loadWorld();
   });
 
@@ -574,6 +587,13 @@
     if (h) jumpToHit(h);
   });
 
+  hudToggleEl.addEventListener('click', function () {
+    setHudOpen(!hudEl.classList.contains('open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && hudEl.classList.contains('open')) setHudOpen(false);
+  });
+
   window.addEventListener('resize', scheduleRender);
   window.addEventListener('load', function () {
     reflectControls();
@@ -594,6 +614,7 @@
   function onPointerDown(e) {
     if (!active || drag) return;
     const canvas = document.getElementById('view');
+    if (e.target === canvas && hudEl.classList.contains('open')) setHudOpen(false);
     if (e.target !== canvas) return;
     const t = active.terrain;
     if (!t || !t.raw) return;

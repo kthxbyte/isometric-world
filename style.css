@@ -38,6 +38,50 @@ html, body {
   user-select: none;
 }
 
+#hud-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 40;
+  width: 42px;
+  height: 42px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 15, 26, 0.82);
+  color: #dbe4f0;
+  border: 1px solid rgba(120, 160, 220, 0.25);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#hud-toggle:hover { background: #1d2d49; }
+
+@media (max-width: 640px) {
+  #hud-toggle { display: flex; }
+
+  #hud {
+    top: 0;
+    left: 0;
+    width: min(80vw, 320px);
+    max-height: 100vh;
+    border-radius: 0 10px 10px 0;
+    transform: translateX(-110%);
+    visibility: hidden;
+    transition: transform 0.28s ease, visibility 0s linear 0.28s;
+  }
+
+  #hud.open {
+    transform: translateX(0);
+    visibility: visible;
+    transition: transform 0.28s ease, visibility 0s;
+  }
+}
+
 #hud::-webkit-scrollbar { width: 8px; }
 #hud::-webkit-scrollbar-thumb { background: rgba(120, 160, 220, 0.25); border-radius: 4px; }
 #hud::-webkit-scrollbar-thumb:hover { background: rgba(120, 160, 220, 0.4); }
