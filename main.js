@@ -56,6 +56,28 @@
     hudToggleEl.classList.toggle('open', !!open);
     hudToggleEl.setAttribute('aria-expanded', String(!!open));
     hudToggleEl.textContent = open ? '\u2715' : '\u2630';
+    refreshViewCenter();
+    scheduleRender();
+  }
+
+  // Keep the map centered on the *visible* area of the viewport. When the
+  // toolbar overlaps the canvas (always on desktop; the open drawer on
+  // narrow screens) it eats a band of the left edge, so the map origin is
+  // shifted right by half that band. The viewport-size listeners below keep
+  // this in sync on resize and on portrait/landscape rotation.
+  function refreshViewCenter() {
+    if (!active) return;
+    const drawer = window.getComputedStyle(hudToggleEl).display !== 'none';
+    const overlays = !drawer || hudEl.classList.contains('open');
+    let dx = 0;
+    if (overlays) {
+      // Left-anchored band: off the design edge (transform-immune) so a
+      // slide-in transition can never be read mid-flight.
+      const left = parseFloat(window.getComputedStyle(hudEl).left) || 0;
+      dx = (left + hudEl.offsetWidth) / 2;
+    }
+    active.viewOffset.x = Math.round(dx);
+    active.viewOffset.y = 0;
   }
 
   // --- Places: an ever-growing list of bookmarked views to jump back to ---
@@ -564,7 +586,8 @@
   });
   docs.fromHash();
 
-  window.addEventListener('resize', scheduleRender);
+  window.addEventListener('resize', function () { refreshViewCenter(); scheduleRender(); });
+  window.addEventListener('orientationchange', function () { refreshViewCenter(); scheduleRender(); });
   window.addEventListener('load', function () {
     reflectControls();
     loadPlaces();
@@ -575,6 +598,7 @@
       setStatus('Error: ' + err.message, 'error');
       return;
     }
+    refreshViewCenter();
     loadWorld();
   });
 

@@ -210,6 +210,7 @@
       this.seaLevel = false;
       this.zoomFactor = 1;
       this.pan = { x: 0, y: 0 };
+      this.viewOffset = { x: 0, y: 0 };
       this.windowSize = 0;
 
       this.texTerrain = null;
@@ -489,8 +490,8 @@
 
       return {
         scale: scale,
-        ox: this.cssW / 2,
-        oy: this.cssH / 2 - midY * scale,
+        ox: this.cssW / 2 + this.viewOffset.x,
+        oy: this.cssH / 2 - midY * scale + this.viewOffset.y,
         minD: -maxD,
         invD: maxD > 0 ? 1 / (2 * maxD) : 0
       };
